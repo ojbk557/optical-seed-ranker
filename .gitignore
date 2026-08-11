@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Generated indexes and reports
+data/index/*
+!data/index/.gitkeep
+runs/
+
+# Patent/lens source files may be private or redistribution-restricted
+data/raw/*
+data/external/*
+!data/raw/.gitkeep
+!data/external/.gitkeep
+*.zos
+*.zar
+*.zda
+
+# Credentials
+.env
+*.secrets.toml

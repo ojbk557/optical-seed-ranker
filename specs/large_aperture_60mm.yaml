@@ -1,0 +1,40 @@
+name: large_aperture_visible_objective
+conjugate: infinity
+architecture: camera
+
+focal_length_mm: 170.14
+f_number: 1.547
+
+field:
+  type: rectangular_angle
+  x_full_deg: 20.0
+  y_full_deg: 20.0
+
+image:
+  width_mm: 60.0
+  height_mm: 60.0
+  surface_semi_diameter_mm: 43.5
+
+wavelengths_nm:
+  - 450.0
+  - 500.0
+  - 587.6
+  - 650.0
+  - 700.0
+  - 800.0
+
+performance:
+  mtf_frequency_lpmm: 50.0
+  minimum_mtf: 0.30
+
+preferred_element_range: [8, 16]
+
+metadata_weights:
+  f_number: 0.30
+  full_fov: 0.25
+  architecture: 0.15
+  spectrum: 0.15
+  geometry: 0.10
+  complexity: 0.05
+
+asymmetric_penalty: 3.0
