@@ -3,6 +3,7 @@ from optical_seed_ranker.scoring import (
     f_number_distance,
     field_distance,
     rank_seeds,
+    score_seed,
 )
 
 
@@ -61,3 +62,46 @@ def test_full_field_at_180_is_explicitly_ineligible():
     result = rank_seeds([panoramic], target())[0]
     assert not result.eligible
     assert "below 180" in (result.reason or "")
+
+
+def test_monochromatic_spectrum_scoring_has_no_zero_division():
+    mono_target = TargetSpec(
+        name="mono",
+        conjugate="infinity",
+        architecture="camera",
+        focal_length_mm=100,
+        f_number=2,
+        field_x_full_deg=10,
+        field_y_full_deg=10,
+        image_width_mm=10,
+        image_height_mm=10,
+        image_surface_semi_diameter_mm=8,
+        wavelengths_nm=(550,),
+    )
+    covered = SeedRecord(
+        seed_id="covered",
+        lens_type="camera",
+        focal_length_mm=100,
+        f_number=2,
+        full_fov_deg=15,
+        surface_count=4,
+        element_count=2,
+        reference="synthetic",
+        wavelength_min_nm=500,
+        wavelength_max_nm=600,
+    )
+    missed = SeedRecord(
+        seed_id="missed",
+        lens_type="camera",
+        focal_length_mm=100,
+        f_number=2,
+        full_fov_deg=15,
+        surface_count=4,
+        element_count=2,
+        reference="synthetic",
+        wavelength_min_nm=600,
+        wavelength_max_nm=700,
+    )
+
+    assert score_seed(covered, mono_target).component_distances["spectrum"] == 0
+    assert score_seed(missed, mono_target).component_distances["spectrum"] > 0

@@ -6,14 +6,20 @@ from typing import Iterable
 from .models import ScoreBreakdown, SeedRecord, TargetSpec
 
 
-def f_number_distance(seed_f_number: float, target_f_number: float, penalty: float) -> float:
+def f_number_distance(
+    seed_f_number: float, target_f_number: float, penalty: float
+) -> float:
     distance = abs(log(seed_f_number / target_f_number))
     return distance * penalty if seed_f_number > target_f_number else distance
 
 
-def field_distance(seed_full_deg: float, target_full_deg: float, penalty: float) -> float:
+def field_distance(
+    seed_full_deg: float, target_full_deg: float, penalty: float
+) -> float:
     if not 0 < seed_full_deg < 180 or not 0 < target_full_deg < 180:
-        raise ValueError("field distance requires full field angles between 0 and 180 degrees")
+        raise ValueError(
+            "field distance requires full field angles between 0 and 180 degrees"
+        )
     seed_tangent = tan(radians(seed_full_deg / 2.0))
     target_tangent = tan(radians(target_full_deg / 2.0))
     distance = abs(log(seed_tangent / target_tangent))
@@ -49,7 +55,12 @@ def _spectrum_distance(seed: SeedRecord, spec: TargetSpec) -> float | None:
     target_max = max(spec.wavelengths_nm)
     missing_blue = max(0.0, seed.wavelength_min_nm - target_min)
     missing_red = max(0.0, target_max - seed.wavelength_max_nm)
-    return (missing_blue + missing_red) / (target_max - target_min)
+    target_span = target_max - target_min
+    # A monochromatic target has no span to normalize by. Normalize uncovered
+    # distance by the target wavelength instead, while retaining a perfect
+    # score when the seed covers that wavelength.
+    normalizer = target_span if target_span > 0 else target_min
+    return (missing_blue + missing_red) / normalizer
 
 
 def _geometry_distance(seed: SeedRecord, spec: TargetSpec) -> float | None:
@@ -124,7 +135,9 @@ def score_seed(seed: SeedRecord, spec: TargetSpec) -> ScoreBreakdown:
     used_weights = {
         name: spec.metadata_weights[name] / available_weight for name in available
     }
-    weighted_distance = sum(used_weights[name] * value for name, value in available.items())
+    weighted_distance = sum(
+        used_weights[name] * value for name, value in available.items()
+    )
     score = max(0.0, 100.0 * (1.0 - weighted_distance))
     component_scores = {
         name: max(0.0, 100.0 * (1.0 - value)) for name, value in available.items()

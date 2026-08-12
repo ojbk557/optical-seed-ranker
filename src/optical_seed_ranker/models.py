@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import atan, degrees, hypot, radians, tan
+from math import atan, degrees, hypot, isfinite, radians, tan
 from typing import Any, Mapping
-
 
 DEFAULT_WEIGHTS: dict[str, float] = {
     "f_number": 0.30,
@@ -17,8 +16,15 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 
 def _positive(name: str, value: float) -> float:
     value = float(value)
-    if value <= 0:
-        raise ValueError(f"{name} must be greater than zero")
+    if not isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be finite and greater than zero")
+    return value
+
+
+def _finite(name: str, value: float) -> float:
+    value = float(value)
+    if not isfinite(value):
+        raise ValueError(f"{name} must be finite")
     return value
 
 
@@ -44,6 +50,10 @@ class TargetSpec:
     asymmetric_penalty: float = 3.0
 
     def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("name cannot be empty")
+        if not self.conjugate.strip() or not self.architecture.strip():
+            raise ValueError("conjugate and architecture cannot be empty")
         _positive("focal_length_mm", self.focal_length_mm)
         _positive("f_number", self.f_number)
         _positive("field_x_full_deg", self.field_x_full_deg)
@@ -55,15 +65,30 @@ class TargetSpec:
             raise ValueError("full field angles must be below 180 degrees")
         if not self.wavelengths_nm:
             raise ValueError("at least one wavelength is required")
-        if any(float(w) <= 0 for w in self.wavelengths_nm):
-            raise ValueError("wavelengths must be greater than zero")
+        if any(not isfinite(float(w)) or float(w) <= 0 for w in self.wavelengths_nm):
+            raise ValueError("wavelengths must be finite and greater than zero")
+        if self.mtf_frequency_lpmm is not None:
+            _positive("mtf_frequency_lpmm", self.mtf_frequency_lpmm)
+        if self.minimum_mtf is not None and (
+            not isfinite(float(self.minimum_mtf)) or not 0 <= self.minimum_mtf <= 1
+        ):
+            raise ValueError("minimum_mtf must be finite and between 0 and 1")
         lo, hi = self.preferred_element_range
         if lo < 1 or hi < lo:
             raise ValueError("preferred_element_range must be [positive_min, max]")
-        if self.asymmetric_penalty < 1:
-            raise ValueError("asymmetric_penalty must be at least 1")
-        if not self.metadata_weights or any(v < 0 for v in self.metadata_weights.values()):
-            raise ValueError("metadata_weights must contain non-negative values")
+        if not isfinite(float(self.asymmetric_penalty)) or self.asymmetric_penalty < 1:
+            raise ValueError("asymmetric_penalty must be finite and at least 1")
+        if not self.metadata_weights or any(
+            not isfinite(float(value)) or float(value) < 0
+            for value in self.metadata_weights.values()
+        ):
+            raise ValueError(
+                "metadata_weights must contain finite, non-negative values"
+            )
+        if not any(float(value) > 0 for value in self.metadata_weights.values()):
+            raise ValueError(
+                "metadata_weights must contain at least one positive value"
+            )
 
     @property
     def diagonal_half_field_deg(self) -> float:
@@ -106,9 +131,7 @@ class TargetSpec:
             field_y_full_deg=float(field_raw["y_full_deg"]),
             image_width_mm=float(image_raw["width_mm"]),
             image_height_mm=float(image_raw["height_mm"]),
-            image_surface_semi_diameter_mm=float(
-                image_raw["surface_semi_diameter_mm"]
-            ),
+            image_surface_semi_diameter_mm=float(image_raw["surface_semi_diameter_mm"]),
             wavelengths_nm=tuple(float(w) for w in raw["wavelengths_nm"]),
             mtf_frequency_lpmm=(
                 float(perf_raw["mtf_frequency_lpmm"])
@@ -150,11 +173,37 @@ class SeedRecord:
     obsolete_glass_count: int | None = None
 
     def __post_init__(self) -> None:
+        if not self.seed_id.strip():
+            raise ValueError("seed_id cannot be empty")
         _positive("seed focal_length_mm", self.focal_length_mm)
         _positive("seed f_number", self.f_number)
         _positive("seed full_fov_deg", self.full_fov_deg)
         if self.surface_count < 1 or self.element_count < 1:
             raise ValueError("surface_count and element_count must be positive")
+        for name, value in (
+            ("wavelength_min_nm", self.wavelength_min_nm),
+            ("wavelength_max_nm", self.wavelength_max_nm),
+        ):
+            if value is not None:
+                _positive(name, value)
+        if (
+            self.wavelength_min_nm is not None
+            and self.wavelength_max_nm is not None
+            and self.wavelength_min_nm > self.wavelength_max_nm
+        ):
+            raise ValueError("wavelength_min_nm cannot exceed wavelength_max_nm")
+        for name, value in (
+            ("total_track_mm", self.total_track_mm),
+            ("back_focal_length_mm", self.back_focal_length_mm),
+        ):
+            if value is not None:
+                _finite(name, value)
+        for name, value in (
+            ("asphere_count", self.asphere_count),
+            ("obsolete_glass_count", self.obsolete_glass_count),
+        ):
+            if value is not None and value < 0:
+                raise ValueError(f"{name} cannot be negative")
 
 
 @dataclass(frozen=True, slots=True)

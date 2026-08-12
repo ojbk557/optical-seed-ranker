@@ -56,6 +56,7 @@ F-number and field penalties are asymmetric:
 - A wider seed can usually be cropped; a narrower seed is penalized more because expanding its field creates new off-axis aberrations.
 - Focal length is reported as a scale factor rather than treated as a dominant distance, because a lens architecture can be scaled while roughly preserving F/# and angular field.
 - Missing feature groups are not silently scored as perfect. Their weights are excluded and the available weights are renormalized.
+- A monochromatic target is supported: uncovered spectral distance is normalized by the target wavelength instead of a zero-width band.
 - V0.1 ranks conventional objectives with full field below 180°. Fisheye/panoramic and spectrometer rows are marked ineligible until they have dedicated field models.
 
 The report exposes every component score. There is no opaque single “AI confidence” number.

@@ -1,4 +1,8 @@
-from optical_seed_ranker.models import TargetSpec
+import math
+
+import pytest
+
+from optical_seed_ranker.models import SeedRecord, TargetSpec
 from optical_seed_ranker.specs import load_spec
 
 
@@ -29,3 +33,36 @@ def test_rejects_non_physical_spec():
         assert "focal_length_mm" in str(error)
     else:
         raise AssertionError("non-physical spec was accepted")
+
+
+def test_rejects_non_finite_spec_values():
+    with pytest.raises(ValueError, match="finite"):
+        TargetSpec(
+            name="bad",
+            conjugate="infinity",
+            architecture="camera",
+            focal_length_mm=math.nan,
+            f_number=2,
+            field_x_full_deg=10,
+            field_y_full_deg=10,
+            image_width_mm=10,
+            image_height_mm=10,
+            image_surface_semi_diameter_mm=8,
+            wavelengths_nm=(550,),
+        )
+
+
+def test_rejects_reversed_seed_spectrum():
+    with pytest.raises(ValueError, match="cannot exceed"):
+        SeedRecord(
+            seed_id="bad",
+            lens_type="camera",
+            focal_length_mm=100,
+            f_number=2,
+            full_fov_deg=20,
+            surface_count=4,
+            element_count=2,
+            reference="synthetic",
+            wavelength_min_nm=700,
+            wavelength_max_nm=400,
+        )
