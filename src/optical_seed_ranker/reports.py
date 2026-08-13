@@ -7,6 +7,20 @@ from typing import Iterable
 
 from .models import ScoreBreakdown, TargetSpec
 
+COMPONENTS = (
+    ("f_number", "f_number"),
+    ("full_fov", "field"),
+    ("architecture", "architecture"),
+    ("spectrum", "spectrum"),
+    ("geometry", "geometry"),
+    ("complexity", "complexity"),
+)
+
+
+def _csv_value(values, name: str) -> str:
+    value = values.get(name)
+    return "" if value is None else f"{value:.6f}"
+
 
 def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> int:
     output_path = Path(path)
@@ -19,7 +33,15 @@ def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> in
         "f_number_score",
         "field_score",
         "architecture_score",
+        "spectrum_score",
+        "geometry_score",
         "complexity_score",
+        "f_number_weight",
+        "field_weight",
+        "architecture_weight",
+        "spectrum_weight",
+        "geometry_weight",
+        "complexity_weight",
         "seed_f_number",
         "seed_full_fov_deg",
         "seed_focal_length_mm",
@@ -41,10 +63,14 @@ def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> in
                     "rank": rank,
                     "seed_id": seed.seed_id,
                     "metadata_score": f"{result.metadata_score:.3f}",
-                    "f_number_score": f"{result.component_scores.get('f_number', 0):.3f}",
-                    "field_score": f"{result.component_scores.get('full_fov', 0):.3f}",
-                    "architecture_score": f"{result.component_scores.get('architecture', 0):.3f}",
-                    "complexity_score": f"{result.component_scores.get('complexity', 0):.3f}",
+                    **{
+                        f"{column}_score": _csv_value(result.component_scores, name)
+                        for name, column in COMPONENTS
+                    },
+                    **{
+                        f"{column}_weight": _csv_value(result.used_weights, name)
+                        for name, column in COMPONENTS
+                    },
                     "seed_f_number": seed.f_number,
                     "seed_full_fov_deg": seed.full_fov_deg,
                     "seed_focal_length_mm": seed.focal_length_mm,
@@ -62,7 +88,12 @@ def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> in
 
 def _score_cell(result: ScoreBreakdown, name: str) -> str:
     value = result.component_scores.get(name)
-    return "—" if value is None else f"{value:.1f}"
+    if value is None:
+        return "—"
+    weight = result.used_weights.get(name)
+    if weight is None:
+        return f"{value:.1f} score"
+    return f"{value:.1f} score · {weight * 100:.1f}% normalized weight"
 
 
 def write_html_report(
@@ -79,11 +110,13 @@ def write_html_report(
             f"<td><span class='rank'>{rank}</span></td>"
             f"<td><strong>{escape(seed.seed_id)}</strong><small>{escape(seed.reference)}</small></td>"
             f"<td><span class='score'>{result.metadata_score:.1f}</span></td>"
-            f"<td>{seed.f_number:.3g}<small>{_score_cell(result, 'f_number')} score</small></td>"
-            f"<td>{seed.full_fov_deg:.2f}°<small>{_score_cell(result, 'full_fov')} score</small></td>"
-            f"<td>{seed.element_count} / {seed.surface_count}<small>elements / surfaces</small></td>"
+            f"<td>{seed.f_number:.3g}<small>{_score_cell(result, 'f_number')}</small></td>"
+            f"<td>{seed.full_fov_deg:.2f}°<small>{_score_cell(result, 'full_fov')}</small></td>"
+            f"<td>{escape(seed.lens_type)}<small>{_score_cell(result, 'architecture')}</small></td>"
+            f"<td>{_score_cell(result, 'spectrum')}</td>"
+            f"<td>{_score_cell(result, 'geometry')}</td>"
+            f"<td>{seed.element_count} / {seed.surface_count}<small>{_score_cell(result, 'complexity')}</small></td>"
             f"<td>{result.scale_factor:.3f}×<small>{seed.focal_length_mm:.2f} → {spec.focal_length_mm:.2f} mm</small></td>"
-            f"<td>{escape(seed.lens_type)}</td>"
             "</tr>"
         )
 
@@ -107,7 +140,7 @@ def write_html_report(
     .target span, small {{ display:block; color:var(--muted); font-size:12px; margin-top:3px; }}
     .note {{ background:#e8f3ee; border:1px solid #cce3d8; padding:16px 18px; border-radius:14px; margin:24px 0; }}
     .table-wrap {{ overflow:auto; background:white; border:1px solid var(--line); border-radius:18px; }}
-    table {{ width:100%; border-collapse:collapse; min-width:980px; }}
+    table {{ width:100%; border-collapse:collapse; min-width:1280px; }}
     th,td {{ padding:15px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }}
     th {{ color:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; background:#fbfcfb; }}
     tr:last-child td {{ border-bottom:0; }}
@@ -131,7 +164,7 @@ def write_html_report(
   </header>
   <div class="note"><strong>Interpretation:</strong> this is a metadata shortlist, not a final lens recommendation. Each candidate still needs scaling, ray-trace feasibility checks, and the same optimization budget.</div>
   <div class="table-wrap"><table>
-    <thead><tr><th>Rank</th><th>Seed</th><th>Metadata</th><th>F/#</th><th>Full field</th><th>Complexity</th><th>Scale</th><th>Type</th></tr></thead>
+    <thead><tr><th>Rank</th><th>Seed</th><th>Metadata</th><th>F/#</th><th>Full field</th><th>Architecture</th><th>Spectrum</th><th>Geometry</th><th>Complexity</th><th>Scale</th></tr></thead>
     <tbody>{''.join(table_rows)}</tbody>
   </table></div>
   <footer>Generated by OpticalSeedRanker 0.1.0. Missing spectrum and packaging features were excluded and available weights were renormalized.</footer>

@@ -48,6 +48,50 @@ runs/large_aperture_60mm/
 └── report.html
 ```
 
+## Local MCP server
+
+The optional MCP server exposes the same deterministic ranker to ChatGPT or
+another MCP client. It binds to the loopback interface only and does not call an
+external AI API.
+
+```powershell
+python -m pip install -e ".[mcp]"
+seedranker-mcp --index data/index/seeds.csv
+```
+
+The local endpoint is `http://127.0.0.1:8765/mcp`. Test it with MCP Inspector
+before connecting a model client. The available tools are:
+
+- `seedranker_derive_uv_target`
+- `seedranker_search_uv_structures`
+- `seedranker_get_local_structure`
+- `seedranker_local_status`
+
+The search combines the generated local LensLibrary index with a small, auditable
+set of public UV patent records. The two leading patent records include transcribed
+surface tables, so `seedranker_get_local_structure` can return a numerical starting
+prescription without any EPO credential or external AI connection. See
+[`docs/uv-wide-field-seed-shortlist.md`](docs/uv-wide-field-seed-shortlist.md) for
+the current 240-320 nm ranking and its limitations.
+
+Each patent candidate also carries its evidence level, the basis for focal length,
+F-number, and field values, and explicit known gaps. Ultra-wide candidates are
+flagged when their patent projection model has not been verified against the
+rectilinear target convention.
+
+The UV search tool treats an `X by Y` angular field as a rectilinear rectangular
+field whose corners touch the circular detector edge. It returns a transparent
+metadata shortlist, not a claim that UV glass, MTF, distortion, or illumination
+requirements have been met. By default the MCP search excludes geometry-only
+records with no documented overlap with the requested wavelength band; this can
+be disabled with `require_documented_spectral_overlap=false`. The structure tool
+accepts only a seed ID already in
+the configured local sources; it reads either a matching Zemax text prescription
+or a transcribed patent surface table without exposing an arbitrary filesystem
+browser. Optional uniform scaling changes radii, thicknesses, and apertures, but
+never improves F-number, field angle, UV transmission, or aberration balance by
+itself.
+
 ## Scoring rules in V0.1
 
 F-number and field penalties are asymmetric:
@@ -55,10 +99,14 @@ F-number and field penalties are asymmetric:
 - A faster seed can usually be stopped down; a slower seed is penalized more because opening it exposes uncorrected marginal rays.
 - A wider seed can usually be cropped; a narrower seed is penalized more because expanding its field creates new off-axis aberrations.
 - Focal length is reported as a scale factor rather than treated as a dominant distance, because a lens architecture can be scaled while roughly preserving F/# and angular field.
+- A monochromatic target is supported: spectrum mismatch is normalized to the target wavelength when the target span is zero.
 - Missing feature groups are not silently scored as perfect. Their weights are excluded and the available weights are renormalized.
 - V0.1 ranks conventional objectives with full field below 180°. Fisheye/panoramic and spectrometer rows are marked ineligible until they have dedicated field models.
 
 The report exposes every component score. There is no opaque single “AI confidence” number.
+
+Display scores use `100 * exp(-weighted_distance)`, so extremely difficult
+targets retain a monotonic, nonzero ranking instead of collapsing to tied zeros.
 
 ## Patent data providers
 

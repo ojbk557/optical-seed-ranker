@@ -15,7 +15,6 @@ from typing import Callable, Iterable, Mapping
 
 from .base import PatentDocument, PatentQuery, PatentRecord
 
-
 TOKEN_URL = "https://ops.epo.org/3.2/auth/accesstoken"
 REST_ROOT = "https://ops.epo.org/3.2/rest-services"
 TERMS_URL = "https://www.epo.org/en/searching-for-patents/data/web-services/ops"

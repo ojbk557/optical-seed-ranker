@@ -2,8 +2,11 @@ from datetime import date
 from urllib.parse import parse_qs, urlparse
 
 from optical_seed_ranker.providers.base import PatentQuery
-from optical_seed_ranker.providers.epo_ops import EpoOpsProvider, HttpResponse, TOKEN_URL
-
+from optical_seed_ranker.providers.epo_ops import (
+    TOKEN_URL,
+    EpoOpsProvider,
+    HttpResponse,
+)
 
 SEARCH_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns:e="http://www.epo.org/exchange">
