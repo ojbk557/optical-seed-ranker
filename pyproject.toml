@@ -20,14 +20,25 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+mcp = ["mcp>=1.29,<2.0"]
+dev = ["pytest>=8.0", "mcp>=1.29,<2.0", "ruff>=0.9,<1"]
 
 [project.scripts]
 seedranker = "optical_seed_ranker.cli:main"
+seedranker-mcp = "optical_seed_ranker.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+optical_seed_ranker = ["data/*.yaml"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

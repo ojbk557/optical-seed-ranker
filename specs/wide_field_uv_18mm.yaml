@@ -1,0 +1,48 @@
+name: wide_field_uv_image_intensifier
+conjugate: infinity
+architecture: camera
+
+# Derived from a rectilinear 60 deg x 60 deg field whose corners touch an
+# 18 mm circular image area. This interpretation gives f ~= 11.02 mm.
+focal_length_mm: 11.0227
+f_number: 0.9186
+
+field:
+  type: rectangular_angle
+  x_full_deg: 60.0
+  y_full_deg: 60.0
+
+image:
+  width_mm: 12.7279
+  height_mm: 12.7279
+  surface_semi_diameter_mm: 9.0
+
+wavelengths_nm:
+  - 240.0
+  - 280.0
+  - 320.0
+
+performance:
+  # The detector pixel pitch/Nyquist frequency was not supplied.
+  mtf_frequency_lpmm: null
+  minimum_mtf: 0.40
+
+preferred_element_range: [4, 14]
+
+metadata_weights:
+  f_number: 0.35
+  full_fov: 0.30
+  architecture: 0.15
+  spectrum: 0.10
+  geometry: 0.00
+  complexity: 0.10
+
+asymmetric_penalty: 3.0
+
+# Requirements not yet scored by the V0.1 metadata ranker:
+requirements:
+  entrance_pupil_min_mm: 12.0
+  detector_diameter_mm: 18.0
+  maximum_distortion_percent: 3.0
+  minimum_relative_illumination_percent: 60.0
+  mtf_reference: nyquist

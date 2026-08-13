@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from math import log, radians, tan
+from math import exp, log, radians, tan
 from typing import Iterable
 
 from .models import ScoreBreakdown, SeedRecord, TargetSpec
@@ -49,7 +49,11 @@ def _spectrum_distance(seed: SeedRecord, spec: TargetSpec) -> float | None:
     target_max = max(spec.wavelengths_nm)
     missing_blue = max(0.0, seed.wavelength_min_nm - target_min)
     missing_red = max(0.0, target_max - seed.wavelength_max_nm)
-    return (missing_blue + missing_red) / (target_max - target_min)
+    target_span = target_max - target_min
+    # Monochromatic targets have no span. Normalize an uncovered wavelength
+    # distance by the target wavelength while preserving zero for coverage.
+    normalizer = target_span if target_span > 0 else target_min
+    return (missing_blue + missing_red) / normalizer
 
 
 def _geometry_distance(seed: SeedRecord, spec: TargetSpec) -> float | None:
@@ -90,8 +94,8 @@ def score_seed(seed: SeedRecord, spec: TargetSpec) -> ScoreBreakdown:
             component_scores={},
             used_weights={},
             reason=(
-                f"unsupported full field {seed.full_fov_deg:g}°; "
-                "V0.1 ranks conventional objectives below 180°"
+                f"unsupported full field {seed.full_fov_deg:g} degrees; "
+                "V0.1 ranks conventional objectives below 180 degrees"
             ),
         )
 
@@ -125,9 +129,11 @@ def score_seed(seed: SeedRecord, spec: TargetSpec) -> ScoreBreakdown:
         name: spec.metadata_weights[name] / available_weight for name in available
     }
     weighted_distance = sum(used_weights[name] * value for name, value in available.items())
-    score = max(0.0, 100.0 * (1.0 - weighted_distance))
+    # Preserve ranking resolution for difficult targets. A clipped linear
+    # display score collapses every candidate to zero once distance exceeds 1.
+    score = 100.0 * exp(-weighted_distance)
     component_scores = {
-        name: max(0.0, 100.0 * (1.0 - value)) for name, value in available.items()
+        name: 100.0 * exp(-value) for name, value in available.items()
     }
 
     return ScoreBreakdown(

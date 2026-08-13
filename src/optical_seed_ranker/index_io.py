@@ -7,7 +7,6 @@ from typing import Iterable
 
 from .models import SeedRecord
 
-
 SEED_FIELDS = tuple(SeedRecord.__dataclass_fields__.keys())
 
 

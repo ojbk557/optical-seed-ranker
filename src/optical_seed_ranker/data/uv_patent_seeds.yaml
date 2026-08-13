@@ -1,0 +1,218 @@
+schema_version: 1
+dataset_name: wide-field UV patent starting structures
+dataset_warning: >-
+  These records reproduce public patent metadata and, where available, numerical
+  prescriptions. They are unvalidated starting structures, not qualified optical
+  designs. Sign conventions, stop definition, glass catalogs, coatings, detector
+  window, and image plane must be checked in optical-design software.
+
+seeds:
+  - seed_id: CN113504627B
+    title: Compact same-material wide-field low-F-number UV optical system
+    lens_type: camera
+    conjugate: infinity
+    focal_length_mm: 7.77
+    focal_length_basis: published
+    f_number: 0.97
+    f_number_basis: published center-field value; patent states about 0.93 at edge
+    full_fov_deg: 130.0
+    full_fov_basis: published
+    surface_count: 18
+    element_count: 8
+    asphere_count: 0
+    wavelength_min_nm: 250.0
+    wavelength_max_nm: 270.0
+    reference: https://patents.google.com/patent/CN113504627B/en
+    source: curated_patent
+    evidence_level: patent_numeric_prescription_unvalidated
+    topology: 3 negative menisci / positive biconvex / filter / stop / 4-lens rear group
+    published_evidence:
+      maximum_spot_rms_radius_um: 121.344
+      detector_pixel_um: 125.0
+      mtf_at_nyquist: null
+      distortion_percent: null
+      relative_illumination_percent: null
+    known_gaps:
+      - Published band covers only 250-270 nm, not the requested 240-320 nm.
+      - Published spot size is too coarse to establish MTF at an unspecified Nyquist frequency.
+      - A 130-degree ultra-wide layout may use a non-rectilinear mapping; distortion is not published.
+      - The published prescription must be checked for sign convention and exact stop placement.
+    prescription:
+      units: mm
+      glass_note: All eight lenses are F_SILICA; the filter is quartz.
+      surfaces:
+        - {number: 1, radius_mm: 108.781, thickness_to_next_mm: 9.612, medium_after_surface: F_SILICA, semi_diameter_mm: 42.9}
+        - {number: 2, radius_mm: 21.709, thickness_to_next_mm: 12.147, medium_after_surface: AIR, semi_diameter_mm: 21.7}
+        - {number: 3, radius_mm: 121.588, thickness_to_next_mm: 5.823, medium_after_surface: F_SILICA, semi_diameter_mm: 23.3}
+        - {number: 4, radius_mm: 16.821, thickness_to_next_mm: 6.476, medium_after_surface: AIR, semi_diameter_mm: 14.0}
+        - {number: 5, radius_mm: 35.148, thickness_to_next_mm: 3.891, medium_after_surface: F_SILICA, semi_diameter_mm: 15.8}
+        - {number: 6, radius_mm: 16.978, thickness_to_next_mm: 4.314, medium_after_surface: AIR, semi_diameter_mm: 12.3}
+        - {number: 7, radius_mm: 53.195, thickness_to_next_mm: 5.509, medium_after_surface: F_SILICA, semi_diameter_mm: 14.4}
+        - {number: 8, radius_mm: -45.623, thickness_to_next_mm: 1.133, medium_after_surface: AIR, semi_diameter_mm: 14.4}
+        - {number: F1, radius_mm: null, thickness_to_next_mm: 18.9, medium_after_surface: QUARTZ, semi_diameter_mm: 13.5, role: filter_front}
+        - {number: F2, radius_mm: null, thickness_to_next_mm: 1.0, medium_after_surface: AIR, semi_diameter_mm: 13.5, role: filter_back}
+        - {number: STOP, radius_mm: null, thickness_to_next_mm: 0.496, medium_after_surface: AIR, semi_diameter_mm: 11.7, is_stop: true}
+        - {number: 11, radius_mm: -294.727, thickness_to_next_mm: 6.718, medium_after_surface: F_SILICA, semi_diameter_mm: 11.8}
+        - {number: 12, radius_mm: -26.167, thickness_to_next_mm: 1.0, medium_after_surface: AIR, semi_diameter_mm: 14.9}
+        - {number: 13, radius_mm: 69.018, thickness_to_next_mm: 6.567, medium_after_surface: F_SILICA, semi_diameter_mm: 17.0}
+        - {number: 14, radius_mm: -69.697, thickness_to_next_mm: 1.0, medium_after_surface: AIR, semi_diameter_mm: 17.0}
+        - {number: 15, radius_mm: 38.365, thickness_to_next_mm: 7.317, medium_after_surface: F_SILICA, semi_diameter_mm: 17.3}
+        - {number: 16, radius_mm: 154.481, thickness_to_next_mm: 0.97, medium_after_surface: AIR, semi_diameter_mm: 14.8}
+        - {number: 17, radius_mm: 22.859, thickness_to_next_mm: 7.617, medium_after_surface: F_SILICA, semi_diameter_mm: 15.6}
+        - {number: 18, radius_mm: 46.227, thickness_to_next_mm: 11.095, medium_after_surface: AIR, semi_diameter_mm: 11.9}
+
+  - seed_id: CN112162388A
+    title: Large-aperture large-field solar-blind UV optical system
+    lens_type: camera
+    conjugate: infinity
+    focal_length_mm: 7.461878
+    focal_length_basis: inferred with a first-order ABCD calculation from the published table indices
+    f_number: 1.30
+    f_number_basis: conservative boundary for the published claim F-number below 1.3
+    full_fov_deg: 115.0
+    full_fov_basis: conservative boundary for the published claim full field above 115 degrees
+    surface_count: 16
+    element_count: 7
+    asphere_count: 1
+    wavelength_min_nm: 250.0
+    wavelength_max_nm: 280.0
+    reference: https://patents.google.com/patent/CN112162388A/zh
+    source: curated_patent
+    evidence_level: patent_numeric_prescription_with_inferred_efl_unvalidated
+    topology: 3-lens negative front group / filter group / 4-lens positive rear group
+    published_evidence:
+      image_circle_min_mm: 17.5
+      relative_illumination_min_percent: 90.0
+      energy_fraction_percent: 80.0
+      energy_circle_diameter_mm: 0.18
+      transmission_min_percent: 90.0
+      mtf_at_nyquist: null
+      distortion_percent: null
+    known_gaps:
+      - The focal length is inferred rather than explicitly stated in the publication.
+      - The table gives refractive indices but not an unambiguous surface-by-surface glass-catalog mapping.
+      - Filter-group media and the final image-space thickness are not given in the table.
+      - Published band covers only 250-280 nm, not the requested 240-320 nm.
+      - Energy concentration does not establish MTF at Nyquist or distortion below 3 percent.
+    prescription:
+      units: mm
+      glass_note: Patent permits fused silica or CaF2; table indices are retained without guessing catalog glasses.
+      surfaces:
+        - {number: S1, radius_mm: 302.0, thickness_to_next_mm: 3.0, refractive_index_table_value: 1.46, role: lens_1_front}
+        - {number: S2, radius_mm: 18.2, thickness_to_next_mm: 14.1, medium_after_surface: AIR, role: lens_1_back}
+        - {number: S3, radius_mm: -51.6, thickness_to_next_mm: 2.5, refractive_index_table_value: 1.43, role: lens_2_front}
+        - {number: S4, radius_mm: 14.2, thickness_to_next_mm: 4.9, medium_after_surface: AIR, role: lens_2_back}
+        - {number: S5, radius_mm: 39.5, thickness_to_next_mm: 4.8, refractive_index_table_value: 1.46, role: lens_3_front}
+        - {number: S6, radius_mm: -71.5, thickness_to_next_mm: 1.9, medium_after_surface: AIR, role: lens_3_back}
+        - {number: S7, radius_mm: null, thickness_to_next_mm: 24.4, medium_after_surface: UNKNOWN_FILTER_GROUP, role: filter_front}
+        - {number: S8, radius_mm: null, thickness_to_next_mm: 3.3, medium_after_surface: AIR, role: filter_back}
+        - {number: S9, radius_mm: 58.8, thickness_to_next_mm: 4.2, refractive_index_table_value: 1.43, role: lens_4_front}
+        - {number: S10, radius_mm: -28.7, thickness_to_next_mm: 0.1, medium_after_surface: AIR, role: lens_4_back}
+        - {number: S11, radius_mm: 19.5, thickness_to_next_mm: 9.7, refractive_index_table_value: 1.43, role: lens_5_front}
+        - {number: S12, radius_mm: -19.5, thickness_to_next_mm: 0.3, medium_after_surface: AIR, role: lens_5_back}
+        - {number: S13, radius_mm: -18.6, thickness_to_next_mm: 2.0, refractive_index_table_value: 1.46, role: lens_6_front}
+        - {number: S14, radius_mm: null, thickness_to_next_mm: 0.1, medium_after_surface: AIR, role: lens_6_back}
+        - number: S15
+          radius_mm: 20.0
+          thickness_to_next_mm: 9.9
+          refractive_index_table_value: 1.46
+          role: lens_7_front_even_asphere
+          conic: 0.0
+          even_asphere_coefficients_mm:
+            a4: -3.8306e-5
+            a6: 9.5125e-8
+            a8: -1.3153e-9
+            a10: 6.1596e-12
+        - {number: S16, radius_mm: 35.0, thickness_to_next_mm: null, medium_after_surface: AIR, role: lens_7_back}
+
+  - seed_id: CN107450163B
+    title: Wide-field solar-blind UV imaging optical system
+    lens_type: camera
+    conjugate: infinity
+    focal_length_mm: 31.0
+    focal_length_basis: published
+    f_number: 3.0
+    f_number_basis: published
+    full_fov_deg: 64.0
+    full_fov_basis: published
+    surface_count: 10
+    element_count: 5
+    asphere_count: 2
+    wavelength_min_nm: 240.0
+    wavelength_max_nm: 280.0
+    reference: https://patents.google.com/patent/CN107450163B/en
+    source: curated_patent
+    evidence_level: patent_metadata_prescription_available_unvalidated
+    topology: 5 lenses with a binary diffractive surface and two aspheres
+    known_gaps:
+      - Much slower and narrower than the requested target.
+      - Diffractive efficiency and color correction are risky over 240-320 nm.
+
+  - seed_id: CN115047595B
+    title: Broadband UV lens
+    lens_type: camera
+    conjugate: infinity
+    focal_length_mm: 25.0
+    focal_length_basis: published
+    f_number: 2.0
+    f_number_basis: published
+    full_fov_deg: 25.0
+    full_fov_basis: published maximum full field
+    surface_count: 26
+    element_count: 13
+    asphere_count: 0
+    wavelength_min_nm: 240.0
+    wavelength_max_nm: 400.0
+    reference: https://patents.google.com/patent/CN115047595B/en
+    source: curated_patent
+    evidence_level: patent_metadata_prescription_available_unvalidated
+    topology: 13-lens spherical fused-silica/CaF2 broadband UV objective
+    known_gaps:
+      - Broadband coverage is useful, but field and aperture are far from the target.
+      - High element count makes it a poor direct starting point for the wide-fast layout.
+
+  - seed_id: CN119335679B
+    title: High-resolution long-wave ultraviolet imaging lens
+    lens_type: camera
+    conjugate: infinity
+    focal_length_mm: 42.4
+    focal_length_basis: published
+    f_number: 2.5
+    f_number_basis: published
+    full_fov_deg: 23.2
+    full_fov_basis: inferred from 17.4 mm image diagonal and 42.4 mm focal length using rectilinear projection
+    surface_count: 15
+    element_count: 7
+    asphere_count: 0
+    wavelength_min_nm: 220.0
+    wavelength_max_nm: 400.0
+    reference: https://patents.google.com/patent/CN119335679B/en
+    source: curated_patent
+    evidence_level: patent_metadata_with_inferred_field_unvalidated
+    topology: 7-lens spherical CaF2/fused-silica broadband UV objective plus filter
+    known_gaps:
+      - The field value used for ranking is inferred, not explicitly published.
+      - Aperture and field are far from the requested target.
+
+  - seed_id: CN111061047B
+    title: Large-relative-aperture UV imaging objective
+    lens_type: camera
+    conjugate: infinity
+    focal_length_mm: 100.0
+    focal_length_basis: published
+    f_number: 1.99
+    f_number_basis: published
+    full_fov_deg: 11.34
+    full_fov_basis: published
+    surface_count: 16
+    element_count: 8
+    asphere_count: 0
+    wavelength_min_nm: 240.0
+    wavelength_max_nm: 280.0
+    reference: https://patents.google.com/patent/CN111061047B/en
+    source: curated_patent
+    evidence_level: patent_metadata_prescription_available_unvalidated
+    topology: 8-lens spherical fused-silica/CaF2 UV objective
+    known_gaps:
+      - Published MTF, illumination, and distortion are useful references, but the field is extremely narrow.
+      - Direct scaling cannot change the field angle or F-number.
