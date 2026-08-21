@@ -19,6 +19,11 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Physics",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ojbk557/optical-seed-ranker"
+Repository = "https://github.com/ojbk557/optical-seed-ranker"
+Issues = "https://github.com/ojbk557/optical-seed-ranker/issues"
+
 [project.optional-dependencies]
 mcp = ["mcp>=1.29,<2.0"]
 dev = ["pytest>=8.0", "mcp>=1.29,<2.0", "ruff>=0.9,<1"]

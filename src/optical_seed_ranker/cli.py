@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+from typing import Any
 
 from .index_io import read_seed_index, write_seed_index
 from .ingest import parse_lenslibrary_properties
+from .mcp_tools import get_local_seed_structure, search_uv_seed_structures
+from .patent_seeds import (
+    get_patent_seed_structure,
+    load_patent_seed_evidence,
+    load_patent_seed_records,
+)
 from .reports import write_html_report, write_ranking_csv
 from .scoring import rank_seeds
 from .specs import load_spec
 
 
 def _index_command(args: argparse.Namespace) -> int:
-    result = parse_lenslibrary_properties(args.source)
+    result = parse_lenslibrary_properties(args.source.resolve())
     count = write_seed_index(result.seeds, args.output)
     print(f"Indexed {count} LensLibrary seeds -> {args.output}")
     if result.skipped_lines:
@@ -41,6 +49,72 @@ def _search_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _write_json(payload: dict[str, Any], output: Path | None) -> None:
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    if output is None:
+        print(serialized, end="")
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(serialized, encoding="utf-8")
+    print(f"Wrote {output}")
+
+
+def _uv_search_command(args: argparse.Namespace) -> int:
+    seeds = load_patent_seed_records()
+    evidence = load_patent_seed_evidence()
+    local_count = 0
+    if args.index is not None:
+        local_seeds = read_seed_index(args.index)
+        local_count = len(local_seeds)
+        seeds.extend(local_seeds)
+
+    result = search_uv_seed_structures(
+        seeds=seeds,
+        evidence_by_seed=evidence,
+        field_x_full_deg=args.field_x,
+        field_y_full_deg=args.field_y,
+        detector_diameter_mm=args.detector_diameter,
+        entrance_pupil_min_mm=args.entrance_pupil,
+        wavelength_min_nm=args.wavelength_min,
+        wavelength_max_nm=args.wavelength_max,
+        minimum_mtf_nyquist=args.minimum_mtf,
+        maximum_distortion_percent=args.maximum_distortion,
+        minimum_relative_illumination_percent=args.minimum_illumination,
+        require_documented_spectral_overlap=(
+            args.require_documented_spectral_overlap
+        ),
+        top_k=args.top_k,
+    )
+    _write_json(result, args.output)
+    print(
+        f"Searched {len(seeds)} seeds ({local_count} local); "
+        f"returned {len(result['candidates'])} metadata candidates"
+    )
+    return 0
+
+
+def _structure_command(args: argparse.Namespace) -> int:
+    patent_ids = {seed.seed_id for seed in load_patent_seed_records()}
+    if args.seed_id in patent_ids:
+        result = get_patent_seed_structure(
+            seed_id=args.seed_id,
+            scale_to_focal_length_mm=args.scale_to_focal_length,
+        )
+    else:
+        if args.index is None:
+            raise KeyError(
+                f"seed_id {args.seed_id!r} is not in the bundled patent data; "
+                "provide --index for a local seed"
+            )
+        result = get_local_seed_structure(
+            index_path=args.index,
+            seed_id=args.seed_id,
+            scale_to_focal_length_mm=args.scale_to_focal_length,
+        )
+    _write_json(result, args.output)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="seedranker",
@@ -64,6 +138,38 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("--output-dir", type=Path, required=True)
     search_parser.set_defaults(handler=_search_command)
 
+    uv_parser = subparsers.add_parser(
+        "uv-search",
+        help="Search bundled UV patent records, optionally with a local index",
+    )
+    uv_parser.add_argument("--index", type=Path)
+    uv_parser.add_argument("--field-x", type=float, default=60.0)
+    uv_parser.add_argument("--field-y", type=float, default=60.0)
+    uv_parser.add_argument("--detector-diameter", type=float, default=18.0)
+    uv_parser.add_argument("--entrance-pupil", type=float, default=12.0)
+    uv_parser.add_argument("--wavelength-min", type=float, default=240.0)
+    uv_parser.add_argument("--wavelength-max", type=float, default=320.0)
+    uv_parser.add_argument("--minimum-mtf", type=float, default=0.4)
+    uv_parser.add_argument("--maximum-distortion", type=float, default=3.0)
+    uv_parser.add_argument("--minimum-illumination", type=float, default=60.0)
+    uv_parser.add_argument(
+        "--require-documented-spectral-overlap",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    uv_parser.add_argument("--top-k", type=int, default=5)
+    uv_parser.add_argument("--output", type=Path, default=Path("uv-shortlist.json"))
+    uv_parser.set_defaults(handler=_uv_search_command)
+
+    structure_parser = subparsers.add_parser(
+        "structure", help="Export a bundled patent or indexed local prescription"
+    )
+    structure_parser.add_argument("--seed-id", required=True)
+    structure_parser.add_argument("--index", type=Path)
+    structure_parser.add_argument("--scale-to-focal-length", type=float)
+    structure_parser.add_argument("--output", type=Path)
+    structure_parser.set_defaults(handler=_structure_command)
+
     return parser
 
 
@@ -72,4 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if getattr(args, "top_k", 1) < 1:
         parser.error("--top-k must be at least 1")
-    return int(args.handler(args))
+    try:
+        return int(args.handler(args))
+    except (KeyError, OSError, UnicodeError, ValueError) as error:
+        parser.error(str(error))

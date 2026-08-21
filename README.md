@@ -11,7 +11,7 @@ seed sources -> normalized features -> metadata shortlist
              -> target feasibility -> equal-budget optimization -> final rank
 ```
 
-V0.1 implements the first stage with the open [LensLibrary](https://github.com/nzhagen/LensLibrary): specification validation, diagonal-field derivation, hard conjugate filtering, asymmetric F-number/field penalties, focal-length scaling, CSV ranking, and an HTML report.
+V0.1 implements the first stage with the open [LensLibrary](https://github.com/nzhagen/LensLibrary) and a bundled, evidence-labelled UV patent dataset: specification validation, diagonal-field derivation, hard conjugate filtering, asymmetric F-number/field penalties, focal-length scaling, CSV/JSON ranking, and an HTML report.
 
 ## Why this is a separate project
 
@@ -20,14 +20,25 @@ V0.1 implements the first stage with the open [LensLibrary](https://github.com/n
 
 They can share schemas and optical analysis code, but their datasets, benchmarks, and success metrics are different.
 
-## Quick start
+## Install and run immediately
+
+Python 3.11 or newer is required. The project is distributed as a versioned GitHub Release wheel; it is not currently published to PyPI.
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install "https://github.com/ojbk557/optical-seed-ranker/releases/download/v0.1.0/optical_seed_ranker-0.1.0-py3-none-any.whl"
+
+seedranker uv-search --top-k 5 --output uv-shortlist.json
+seedranker structure --seed-id CN113504627B --output CN113504627B.json
+```
+
+These commands need no external dataset or API credential. The output is an evidence-limited metadata shortlist and a transcribed starting prescription, not a qualified UV design. Verify the release wheel against `SHA256SUMS.txt` on the [v0.1.0 release page](https://github.com/ojbk557/optical-seed-ranker/releases/tag/v0.1.0) when integrity matters.
+
+## Rank a local LensLibrary checkout
 
 ```bash
 git clone https://github.com/nzhagen/LensLibrary.git data/external/LensLibrary
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-python -m pip install -e ".[dev]"
 
 seedranker index \
   --source data/external/LensLibrary/lens_properties_list.txt \
@@ -48,6 +59,19 @@ runs/large_aperture_60mm/
 └── report.html
 ```
 
+`seedranker index` records absolute prescription paths, so the selected row can be handed directly to the companion optimizer:
+
+```powershell
+seedopt run `
+  --backend zosapi `
+  --ranking-csv runs\large_aperture_60mm\ranking.csv `
+  --rank 1 `
+  --config path\to\optimizer-target.yaml `
+  --output-root runs\optimized
+```
+
+The selected ranking row must contain an accessible local `source_path`; metadata-only patent rows cannot be passed to OpticStudio until they have been reconstructed as a supported optical file.
+
 ## Local MCP server
 
 The optional MCP server exposes the same deterministic ranker to ChatGPT or
@@ -55,9 +79,11 @@ another MCP client. It binds to the loopback interface only and does not call an
 external AI API.
 
 ```powershell
-python -m pip install -e ".[mcp]"
-seedranker-mcp --index data/index/seeds.csv
+python -m pip install "optical-seed-ranker[mcp] @ https://github.com/ojbk557/optical-seed-ranker/releases/download/v0.1.0/optical_seed_ranker-0.1.0-py3-none-any.whl"
+seedranker-mcp
 ```
+
+Add `--index data/index/seeds.csv` to combine a local LensLibrary index with the bundled records.
 
 The local endpoint is `http://127.0.0.1:8765/mcp`. Test it with MCP Inspector
 before connecting a model client. The available tools are:
@@ -127,7 +153,7 @@ See [docs/patent-data-architecture.md](docs/patent-data-architecture.md) for the
 
 ## Roadmap
 
-- V0.2: parse real `.zmx`/`.zar` files with `ray-optics` and enrich topology, glass, wavelength, track, and stop features.
+- V0.2: add `.zar` ingestion and ray-trace feasibility features beyond the current Zemax text-prescription parser.
 - V0.3: optional Windows + OpticStudio validation through ZOS-API.
 - V0.4: give every shortlisted seed identical variables, merit function, and optimization budget; rank adaptability.
 - V0.5: use AI only for natural-language-to-YAML conversion and evidence-grounded report explanations.
@@ -137,7 +163,10 @@ Commercial software and licenses are never bundled with this repository. Private
 ## Development
 
 ```bash
+git clone https://github.com/ojbk557/optical-seed-ranker.git
+cd optical-seed-ranker
 python -m pip install -e ".[dev]"
+ruff check .
 pytest
 ```
 
