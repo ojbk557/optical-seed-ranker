@@ -1,3 +1,5 @@
+import pytest
+
 from optical_seed_ranker.index_io import write_seed_index
 from optical_seed_ranker.mcp_tools import (
     derive_rectilinear_target,
@@ -172,6 +174,7 @@ def test_reads_and_scales_prescription_selected_from_local_index(tmp_path):
     assert result["scaling"]["scale_factor"] == 0.5
     assert result["prescription"]["system"]["wavelengths_nm"] == [280.0]
     assert result["prescription"]["system"]["x_fields_deg"] == [0.0, 10.0]
+    assert result["prescription"]["system"]["entrance_pupil_diameter_mm"] == 2.0
     first_element = result["prescription"]["element_regions"][0]
     assert first_element["front_radius_mm"] == 5.0
     assert first_element["back_radius_mm"] == -2.5
@@ -285,7 +288,23 @@ def test_scales_even_asphere_parameters_with_length_dimensions(tmp_path):
     )
     payload = prescription_payload(parse_zmx_prescription(prescription), scale_factor=2)
     params = payload["surfaces"][1]["parameters"]
-    assert params["1"] == -1
-    # Zemax EVENASPH PARM 2 is the r^2 coefficient; PARM 3 is r^4.
-    assert params["2"] == 0.002
-    assert params["3"] == 7.5e-07
+    # Zemax EVENASPH PARM n is alpha_n on r^(2n); CONI stores the conic.
+    assert params["1"] == pytest.approx(-0.5)
+    assert params["2"] == pytest.approx(0.0005)
+    assert params["3"] == pytest.approx(1.875e-07)
+
+
+@pytest.mark.parametrize("scale_factor", [0, -1, float("nan"), float("inf")])
+def test_rejects_invalid_prescription_scale_factor(tmp_path, scale_factor):
+    prescription = tmp_path / "scale.zmx"
+    prescription.write_text(
+        "UNIT MM X W X CM MR CPMM\n"
+        "SURF 0\n TYPE STANDARD\n CURV 0\n DISZ INFINITY\n"
+        "SURF 1\n TYPE STANDARD\n CURV 0\n DISZ 0\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="scale_factor"):
+        prescription_payload(
+            parse_zmx_prescription(prescription), scale_factor=scale_factor
+        )
