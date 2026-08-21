@@ -1,7 +1,10 @@
 import asyncio
+import warnings
 
 import pytest
+from pydantic_settings import IncompleteFieldDefinitionWarning
 
+import optical_seed_ranker.mcp_server as mcp_server
 from optical_seed_ranker.mcp_server import create_server
 
 
@@ -11,7 +14,9 @@ def test_mcp_server_rejects_non_loopback_binding():
 
 
 def test_mcp_server_registers_and_calls_local_tools(tmp_path):
-    server = create_server(index_path=tmp_path / "missing.csv")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", IncompleteFieldDefinitionWarning)
+        server = create_server(index_path=tmp_path / "missing.csv")
     names = {tool.name for tool in server._tool_manager.list_tools()}
     assert names == {
         "seedranker_derive_uv_target",
@@ -43,3 +48,17 @@ def test_mcp_server_registers_and_calls_local_tools(tmp_path):
     assert status["loopback_only"] is True
     assert status["curated_patent_seed_count"] == 6
     assert search["candidates"][0]["evidence"]["known_gaps"]
+
+
+def test_mcp_cli_treats_keyboard_interrupt_as_a_clean_shutdown(
+    monkeypatch, capsys
+):
+    class InterruptedServer:
+        def run(self, *, transport):
+            assert transport == "streamable-http"
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(mcp_server, "create_server", lambda **kwargs: InterruptedServer())
+
+    assert mcp_server.main(["--port", "8891"]) == 0
+    assert "Server stopped." in capsys.readouterr().out

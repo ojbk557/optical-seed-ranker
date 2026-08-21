@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 - 2026-08-22
+
+- Stop the MCP server cleanly on Ctrl+C without an application traceback.
+- Rebuild MCP's generic settings model after import to remove its startup warning.
+
 ## 0.1.0 - 2026-08-21
 
 - Rank LensLibrary records with transparent asymmetric engineering distances.

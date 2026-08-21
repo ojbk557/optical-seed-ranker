@@ -45,6 +45,7 @@ def create_server(
 ) -> Any:
     try:
         from mcp.server.fastmcp import FastMCP
+        from mcp.server.fastmcp.server import Settings as FastMCPSettings
         from mcp.types import ToolAnnotations
     except ModuleNotFoundError as error:
         raise RuntimeError(
@@ -52,6 +53,9 @@ def create_server(
             "Install it with `python -m pip install \"optical-seed-ranker[mcp]\"` "
             "or, from a source checkout, `python -m pip install -e \".[mcp]\"`."
         ) from error
+    # MCP 1.29 leaves this generic forward reference unresolved at import time.
+    # Rebuilding after FastMCP is defined prevents a noisy Pydantic settings warning.
+    FastMCPSettings.model_rebuild()
     if host not in {"127.0.0.1", "localhost", "::1"}:
         raise ValueError("the local MCP server may only bind to a loopback address")
     resolved_index = Path(index_path).resolve() if index_path else _default_index_path()
@@ -261,7 +265,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     except RuntimeError as error:
         raise SystemExit(str(error)) from error
-    server.run(transport="streamable-http")
+    try:
+        server.run(transport="streamable-http")
+    except KeyboardInterrupt:
+        print("Server stopped.")
     return 0
 
 
