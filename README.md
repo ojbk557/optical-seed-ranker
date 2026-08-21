@@ -27,13 +27,13 @@ Python 3.11 or newer is required. The project is distributed as a versioned GitH
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install "https://github.com/ojbk557/optical-seed-ranker/releases/download/v0.1.0/optical_seed_ranker-0.1.0-py3-none-any.whl"
+python -m pip install "https://github.com/ojbk557/optical-seed-ranker/releases/download/v0.1.1/optical_seed_ranker-0.1.1-py3-none-any.whl"
 
 seedranker uv-search --top-k 5 --output uv-shortlist.json
 seedranker structure --seed-id CN113504627B --output CN113504627B.json
 ```
 
-These commands need no external dataset or API credential. The output is an evidence-limited metadata shortlist and a transcribed starting prescription, not a qualified UV design. Verify the release wheel against `SHA256SUMS.txt` on the [v0.1.0 release page](https://github.com/ojbk557/optical-seed-ranker/releases/tag/v0.1.0) when integrity matters.
+These commands need no external dataset or API credential. The output is an evidence-limited metadata shortlist and a transcribed starting prescription, not a qualified UV design. Verify the release wheel against `SHA256SUMS.txt` on the [v0.1.1 release page](https://github.com/ojbk557/optical-seed-ranker/releases/tag/v0.1.1) when integrity matters.
 
 ## Rank a local LensLibrary checkout
 
@@ -79,7 +79,7 @@ another MCP client. It binds to the loopback interface only and does not call an
 external AI API.
 
 ```powershell
-python -m pip install "optical-seed-ranker[mcp] @ https://github.com/ojbk557/optical-seed-ranker/releases/download/v0.1.0/optical_seed_ranker-0.1.0-py3-none-any.whl"
+python -m pip install "optical-seed-ranker[mcp] @ https://github.com/ojbk557/optical-seed-ranker/releases/download/v0.1.1/optical_seed_ranker-0.1.1-py3-none-any.whl"
 seedranker-mcp
 ```
 
