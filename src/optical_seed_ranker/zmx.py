@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -144,12 +145,10 @@ def _scaled_surface_parameters(
             scaled[parameter_number] = None
             continue
         number = int(parameter_number)
-        if number == 1:
-            # PARM 1 is the conic constant for an Even Asphere and is dimensionless.
-            scaled[parameter_number] = value
-        else:
-            radial_order = 2 * number - 2
-            scaled[parameter_number] = value * scale_factor ** (1 - radial_order)
+        # OpticStudio stores the conic constant in CONI. EVENASPH PARM n is
+        # alpha_n on r^(2n), so its length dimension is L^(1-2n).
+        radial_order = 2 * number
+        scaled[parameter_number] = value * scale_factor ** (1 - radial_order)
     return scaled
 
 
@@ -158,7 +157,16 @@ def prescription_payload(
 ) -> dict[str, Any]:
     """Return a compact prescription and element-region table."""
 
+    scale_factor = float(scale_factor)
+    if not isfinite(scale_factor) or scale_factor <= 0:
+        raise ValueError("scale_factor must be finite and greater than zero")
+
     surfaces = parsed["surfaces"]
+    system = dict(parsed["system"])
+    if system.get("entrance_pupil_diameter_mm") is not None:
+        system["entrance_pupil_diameter_mm"] = _scaled(
+            system["entrance_pupil_diameter_mm"], scale_factor
+        )
     compact_surfaces: list[dict[str, Any]] = []
     element_regions: list[dict[str, Any]] = []
 
@@ -217,7 +225,7 @@ def prescription_payload(
             )
 
     return {
-        "system": parsed["system"],
+        "system": system,
         "scale_factor": round(scale_factor, 9),
         "surface_count_including_object_and_image": len(compact_surfaces),
         "element_region_count_including_windows": len(element_regions),
