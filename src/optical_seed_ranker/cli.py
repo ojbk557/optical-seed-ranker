@@ -49,11 +49,8 @@ def _search_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _write_json(payload: dict[str, Any], output: Path | None) -> None:
+def _write_json(payload: dict[str, Any], output: Path) -> None:
     serialized = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-    if output is None:
-        print(serialized, end="")
-        return
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(serialized, encoding="utf-8")
     print(f"Wrote {output}")
@@ -167,7 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
     structure_parser.add_argument("--seed-id", required=True)
     structure_parser.add_argument("--index", type=Path)
     structure_parser.add_argument("--scale-to-focal-length", type=float)
-    structure_parser.add_argument("--output", type=Path)
+    structure_parser.add_argument("--output", type=Path, required=True)
     structure_parser.set_defaults(handler=_structure_command)
 
     return parser

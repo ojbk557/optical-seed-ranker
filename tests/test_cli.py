@@ -40,9 +40,17 @@ def test_structure_exports_bundled_patent_prescription(tmp_path):
     assert len(payload["prescription"]["surfaces"]) == 19
 
 
-def test_structure_requires_index_for_unknown_seed(capsys):
+def test_structure_requires_index_for_unknown_seed(tmp_path, capsys):
     with pytest.raises(SystemExit) as error:
-        main(["structure", "--seed-id", "missing"])
+        main(
+            [
+                "structure",
+                "--seed-id",
+                "missing",
+                "--output",
+                str(tmp_path / "missing.json"),
+            ]
+        )
 
     assert error.value.code == 2
     assert "provide --index" in capsys.readouterr().err
