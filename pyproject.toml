@@ -25,8 +25,8 @@ Repository = "https://github.com/ojbk557/optical-seed-ranker"
 Issues = "https://github.com/ojbk557/optical-seed-ranker/issues"
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.29,<2.0"]
-dev = ["pytest>=8.0", "mcp>=1.29,<2.0", "ruff>=0.9,<1"]
+mcp = ["mcp>=1.29,<3.0"]
+dev = ["pytest>=8.0", "mcp>=1.29,<3.0", "ruff>=0.9,<1"]
 
 [project.scripts]
 seedranker = "optical_seed_ranker.cli:main"
