@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-import json
+from collections import Counter
 from hashlib import sha256
-from math import hypot, radians, tan
+from math import hypot, isfinite, radians, tan
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from .identifiers import (
+    LOCAL_PROVIDER,
+    PATENT_PROVIDER,
+    make_seed_handle,
+    provider_for_seed,
+    seed_handle,
+)
 from .index_io import read_seed_index
+from .json_io import ensure_standard_json, standard_json_dumps
 from .models import ScoreBreakdown, SeedRecord, TargetSpec
 from .scoring import rank_seeds
 from .zmx import parse_zmx_prescription, prescription_payload
@@ -14,16 +22,20 @@ from .zmx import parse_zmx_prescription, prescription_payload
 
 def _positive(name: str, value: float) -> float:
     value = float(value)
-    if value <= 0:
-        raise ValueError(f"{name} must be greater than zero")
+    if not isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be finite and greater than zero")
     return value
 
 
 def _percent(name: str, value: float) -> float:
     value = float(value)
-    if not 0 <= value <= 100:
-        raise ValueError(f"{name} must be between 0 and 100")
+    if not isfinite(value) or not 0 <= value <= 100:
+        raise ValueError(f"{name} must be finite and between 0 and 100")
     return value
+
+
+def _display_number(value: float) -> str:
+    return format(value, ".15g")
 
 
 def derive_rectilinear_target(
@@ -51,13 +63,15 @@ def derive_rectilinear_target(
     x_tangent = tan(radians(field_x_full_deg / 2.0))
     y_tangent = tan(radians(field_y_full_deg / 2.0))
     corner_tangent = hypot(x_tangent, y_tangent)
+    if not isfinite(corner_tangent) or corner_tangent <= 0:
+        raise ValueError("field angles must produce a finite rectilinear projection")
     detector_radius_mm = detector_diameter_mm / 2.0
     focal_length_mm = detector_radius_mm / corner_tangent
     image_width_mm = 2.0 * focal_length_mm * x_tangent
     image_height_mm = 2.0 * focal_length_mm * y_tangent
     f_number_max = focal_length_mm / entrance_pupil_min_mm
 
-    return {
+    derived = {
         "focal_length_mm": focal_length_mm,
         "f_number_max": f_number_max,
         "image_width_mm": image_width_mm,
@@ -65,6 +79,9 @@ def derive_rectilinear_target(
         "image_surface_semi_diameter_mm": detector_radius_mm,
         "entrance_pupil_min_mm": entrance_pupil_min_mm,
     }
+    if any(not isfinite(value) or value <= 0 for value in derived.values()):
+        raise ValueError("derived target values must be finite and greater than zero")
+    return ensure_standard_json(derived)
 
 
 def build_uv_target_spec(
@@ -82,8 +99,8 @@ def build_uv_target_spec(
     if wavelength_max_nm <= wavelength_min_nm:
         raise ValueError("wavelength_max_nm must exceed wavelength_min_nm")
     minimum_mtf_nyquist = float(minimum_mtf_nyquist)
-    if not 0 <= minimum_mtf_nyquist <= 1:
-        raise ValueError("minimum_mtf_nyquist must be between 0 and 1")
+    if not isfinite(minimum_mtf_nyquist) or not 0 <= minimum_mtf_nyquist <= 1:
+        raise ValueError("minimum_mtf_nyquist must be finite and between 0 and 1")
 
     derived = derive_rectilinear_target(
         field_x_full_deg=field_x_full_deg,
@@ -164,6 +181,8 @@ def _candidate_payload(
     payload = {
         "rank": rank,
         "seed_id": seed.seed_id,
+        "seed_handle": seed_handle(seed),
+        "provider": provider_for_seed(seed),
         "lens_type": seed.lens_type,
         "metadata_score": round(result.metadata_score, 3),
         "weighted_engineering_distance": round(result.weighted_distance, 6),
@@ -222,7 +241,11 @@ def search_uv_seed_structures(
     require_documented_spectral_overlap: bool = False,
     top_k: int = 5,
 ) -> dict[str, Any]:
-    if not 1 <= int(top_k) <= 20:
+    try:
+        parsed_top_k = int(top_k)
+    except (OverflowError, TypeError, ValueError) as error:
+        raise ValueError("top_k must be an integer between 1 and 20") from error
+    if isinstance(top_k, bool) or parsed_top_k != top_k or not 1 <= parsed_top_k <= 20:
         raise ValueError("top_k must be between 1 and 20")
     maximum_distortion_percent = _percent(
         "maximum_distortion_percent", maximum_distortion_percent
@@ -241,6 +264,7 @@ def search_uv_seed_structures(
         minimum_mtf_nyquist=minimum_mtf_nyquist,
     )
     seed_list = list(seeds)
+    seed_id_counts = Counter(seed.seed_id for seed in seed_list)
     evidence_by_seed = evidence_by_seed or {}
     all_ranked = [item for item in rank_seeds(seed_list, spec) if item.eligible]
 
@@ -258,7 +282,19 @@ def search_uv_seed_structures(
         if require_documented_spectral_overlap
         else all_ranked
     )
-    selected = ranked[: int(top_k)]
+    selected = ranked[:parsed_top_k]
+
+    def evidence_for(seed: SeedRecord) -> Mapping[str, Any] | None:
+        qualified = evidence_by_seed.get(seed_handle(seed))
+        if qualified is not None:
+            return qualified
+        # The patent evidence loader historically returned bare keys. Only bind
+        # that legacy form to a patent record when providers collide.
+        if provider_for_seed(seed) == PATENT_PROVIDER:
+            return evidence_by_seed.get(seed.seed_id)
+        if seed_id_counts[seed.seed_id] == 1:
+            return evidence_by_seed.get(seed.seed_id)
+        return None
 
     query_fields = {
         "field_x_full_deg": float(field_x_full_deg),
@@ -277,10 +313,10 @@ def search_uv_seed_structures(
         ),
     }
     query_id = sha256(
-        json.dumps(query_fields, sort_keys=True).encode("utf-8")
+        standard_json_dumps(query_fields, sort_keys=True).encode("utf-8")
     ).hexdigest()[:16]
 
-    return {
+    result_payload = {
         "query_id": query_id,
         "evidence_level": "metadata_topology_shortlist",
         "derived_target": {
@@ -296,8 +332,11 @@ def search_uv_seed_structures(
         "assumptions": [
             "infinite_conjugate",
             "rectilinear_projection",
-            "rectangular_field_corners_touch_the_18_mm_image_circle",
-            "entrance_pupil_is_evaluated_at_its_12_mm_minimum",
+            "rectangular_field_corners_touch_the_"
+            f"{_display_number(2.0 * derived['image_surface_semi_diameter_mm'])}"
+            "_mm_image_circle",
+            "entrance_pupil_is_evaluated_at_its_"
+            f"{_display_number(derived['entrance_pupil_min_mm'])}_mm_minimum",
         ],
         "indexed_seed_count": len(seed_list),
         "eligible_seed_count": len(all_ranked),
@@ -315,7 +354,7 @@ def search_uv_seed_structures(
                 result,
                 spec,
                 rank,
-                evidence=evidence_by_seed.get(result.seed.seed_id),
+                evidence=evidence_for(result.seed),
             )
             for rank, result in enumerate(selected, start=1)
         ],
@@ -333,6 +372,7 @@ def search_uv_seed_structures(
             "validate equal-budget adaptations in Zemax before selecting a seed."
         ),
     }
+    return ensure_standard_json(result_payload)
 
 
 def search_uv_seed_index(index_path: str | Path, **kwargs: Any) -> dict[str, Any]:
@@ -354,6 +394,18 @@ def _resolve_seed_source(index_path: Path, source_path: str) -> Path:
         resolved = candidate.resolve()
         if resolved.is_file():
             return resolved
+        if resolved.suffix.casefold() == ".zmx" and resolved.parent.is_dir():
+            matches = [
+                item.resolve()
+                for item in resolved.parent.iterdir()
+                if item.is_file() and item.name.casefold() == resolved.name.casefold()
+            ]
+            if len(matches) == 1:
+                return matches[0]
+            if len(matches) > 1:
+                raise ValueError(
+                    "the indexed prescription path has multiple case-insensitive matches"
+                )
     raise FileNotFoundError("the indexed local prescription file is unavailable")
 
 
@@ -384,10 +436,11 @@ def get_local_seed_structure(
 
     prescription_path = _resolve_seed_source(resolved_index, seed.source_path)
     parsed = parse_zmx_prescription(prescription_path)
-    return {
+    payload = {
         "evidence_level": "source_prescription_unvalidated",
         "seed": {
             "seed_id": seed.seed_id,
+            "seed_handle": make_seed_handle(LOCAL_PROVIDER, seed.seed_id),
             "lens_type": seed.lens_type,
             "reference": seed.reference,
             "source": seed.source,
@@ -410,3 +463,4 @@ def get_local_seed_structure(
             "Re-run glass, coating, MTF, distortion, illumination, and tolerance analyses.",
         ],
     }
+    return ensure_standard_json(payload)

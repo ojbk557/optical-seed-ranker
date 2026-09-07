@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 from typing import Any
 
+from .identifiers import (
+    LOCAL_PROVIDER,
+    PATENT_PROVIDER,
+    resolve_seed_selector,
+)
 from .index_io import read_seed_index, write_seed_index
 from .ingest import parse_lenslibrary_properties
+from .json_io import standard_json_dumps
 from .mcp_tools import get_local_seed_structure, search_uv_seed_structures
 from .patent_seeds import (
     get_patent_seed_structure,
@@ -50,7 +55,7 @@ def _search_command(args: argparse.Namespace) -> int:
 
 
 def _write_json(payload: dict[str, Any], output: Path) -> None:
-    serialized = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    serialized = standard_json_dumps(payload, ensure_ascii=False, indent=2) + "\n"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(serialized, encoding="utf-8")
     print(f"Wrote {output}")
@@ -91,21 +96,33 @@ def _uv_search_command(args: argparse.Namespace) -> int:
 
 
 def _structure_command(args: argparse.Namespace) -> int:
-    patent_ids = {seed.seed_id for seed in load_patent_seed_records()}
-    if args.seed_id in patent_ids:
+    patents = load_patent_seed_records()
+    local_seeds = (
+        read_seed_index(args.index)
+        if args.index is not None and args.index.is_file()
+        else []
+    )
+    try:
+        provider, seed_id = resolve_seed_selector(
+            args.seed_id,
+            local_seed_ids=(seed.seed_id for seed in local_seeds),
+            patent_seed_ids=(seed.seed_id for seed in patents),
+        )
+    except KeyError as error:
+        if args.index is None:
+            raise KeyError(f"{error.args[0]}; provide --index for a local seed") from error
+        raise
+    if provider == PATENT_PROVIDER:
         result = get_patent_seed_structure(
-            seed_id=args.seed_id,
+            seed_id=seed_id,
             scale_to_focal_length_mm=args.scale_to_focal_length,
         )
     else:
-        if args.index is None:
-            raise KeyError(
-                f"seed_id {args.seed_id!r} is not in the bundled patent data; "
-                "provide --index for a local seed"
-            )
+        assert provider == LOCAL_PROVIDER
+        assert args.index is not None
         result = get_local_seed_structure(
             index_path=args.index,
-            seed_id=args.seed_id,
+            seed_id=seed_id,
             scale_to_focal_length_mm=args.scale_to_focal_length,
         )
     _write_json(result, args.output)
@@ -161,7 +178,11 @@ def build_parser() -> argparse.ArgumentParser:
     structure_parser = subparsers.add_parser(
         "structure", help="Export a bundled patent or indexed local prescription"
     )
-    structure_parser.add_argument("--seed-id", required=True)
+    structure_parser.add_argument(
+        "--seed-id",
+        required=True,
+        help="Bare seed ID when unique, or a provider-qualified local:/patent: handle",
+    )
     structure_parser.add_argument("--index", type=Path)
     structure_parser.add_argument("--scale-to-focal-length", type=float)
     structure_parser.add_argument("--output", type=Path, required=True)

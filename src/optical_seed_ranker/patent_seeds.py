@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from .identifiers import make_seed_handle
+from .json_io import ensure_standard_json
 from .models import SeedRecord
 
 DEFAULT_PATENT_SEEDS_PATH = Path(__file__).resolve().parent / "data" / "uv_patent_seeds.yaml"
@@ -24,8 +27,15 @@ EVIDENCE_FIELDS = (
 
 def _positive(name: str, value: float) -> float:
     parsed = float(value)
-    if parsed <= 0:
-        raise ValueError(f"{name} must be greater than zero")
+    if not isfinite(parsed) or parsed <= 0:
+        raise ValueError(f"{name} must be finite and greater than zero")
+    return parsed
+
+
+def _finite(name: str, value: float) -> float:
+    parsed = float(value)
+    if not isfinite(parsed):
+        raise ValueError(f"{name} must be finite")
     return parsed
 
 
@@ -55,6 +65,7 @@ def load_patent_seed_records(
                 element_count=int(item["element_count"]),
                 reference=str(item["reference"]),
                 source=str(item.get("source", "curated_patent")),
+                provider="patent",
                 wavelength_min_nm=(
                     float(item["wavelength_min_nm"])
                     if item.get("wavelength_min_nm") is not None
@@ -95,14 +106,27 @@ def _scale_surface(surface: dict[str, Any], scale_factor: float) -> dict[str, An
     scaled = deepcopy(surface)
     for field in ("radius_mm", "thickness_to_next_mm", "semi_diameter_mm"):
         if scaled.get(field) is not None:
-            scaled[field] = round(float(scaled[field]) * scale_factor, 9)
+            scaled_value = _finite(field, scaled[field]) * scale_factor
+            if not isfinite(scaled_value):
+                raise ValueError(f"scaled {field} must be finite")
+            scaled[field] = round(scaled_value, 9)
     coefficients = scaled.get("even_asphere_coefficients_mm")
     if isinstance(coefficients, dict):
         scaled_coefficients: dict[str, float] = {}
         for name, value in coefficients.items():
             order = int(str(name).lstrip("a"))
             # If every length is scaled by s, A_n scales by s^(1-n).
-            scaled_coefficients[str(name)] = float(value) * scale_factor ** (1 - order)
+            try:
+                scaled_value = _finite(str(name), value) * scale_factor ** (
+                    1 - order
+                )
+            except (OverflowError, ZeroDivisionError) as error:
+                raise ValueError(
+                    f"scaled asphere coefficient {name} must be finite"
+                ) from error
+            if not isfinite(scaled_value):
+                raise ValueError(f"scaled asphere coefficient {name} must be finite")
+            scaled_coefficients[str(name)] = scaled_value
         scaled["even_asphere_coefficients_mm"] = scaled_coefficients
     return scaled
 
@@ -131,17 +155,21 @@ def get_patent_seed_structure(
         target_focal_length = _positive(
             "scale_to_focal_length_mm", scale_to_focal_length_mm
         )
-        scale_factor = target_focal_length / float(item["focal_length_mm"])
+        scale_factor = _positive(
+            "scale_factor",
+            target_focal_length / float(item["focal_length_mm"]),
+        )
 
     scaled_prescription = deepcopy(prescription)
     scaled_prescription["surfaces"] = [
         _scale_surface(surface, scale_factor)
         for surface in prescription["surfaces"]
     ]
-    return {
+    payload = {
         "evidence_level": item["evidence_level"],
         "seed": {
             "seed_id": item["seed_id"],
+            "seed_handle": make_seed_handle("patent", str(item["seed_id"])),
             "title": item["title"],
             "reference": item["reference"],
             "source": item["source"],
@@ -169,3 +197,4 @@ def get_patent_seed_structure(
         "published_evidence": item.get("published_evidence", {}),
         "warnings": list(item.get("known_gaps", [])),
     }
+    return ensure_standard_json(payload)

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add provider-qualified seed handles while preserving unambiguous bare-ID calls.
+- Resolve LensLibrary `.zmx` files case-insensitively and reject non-finite inputs.
+- Validate clearly contradictory rectilinear target dimensions.
+- Protect CSV text from spreadsheet formulas without breaking optimizer paths.
+- Make release builds version-gated, reproducible, and non-overwriting.
+
 ## 0.1.1 - 2026-08-22
 
 - Stop the MCP server cleanly on Ctrl+C without an application traceback.

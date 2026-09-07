@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
 from ..models import SeedRecord
@@ -16,9 +17,20 @@ class LensLibraryIndexResult:
 
 def _as_float(value: str) -> float | None:
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return None
+    return number if isfinite(number) else None
+
+
+def _zemax_files_by_stem(directory: Path) -> dict[str, list[Path]]:
+    files: dict[str, list[Path]] = {}
+    if not directory.is_dir():
+        return files
+    for candidate in sorted(directory.iterdir(), key=lambda item: item.name.casefold()):
+        if candidate.is_file() and candidate.suffix.casefold() == ".zmx":
+            files.setdefault(candidate.stem.casefold(), []).append(candidate.resolve())
+    return files
 
 
 def _as_int(value: str) -> int | None:
@@ -41,6 +53,7 @@ def parse_lenslibrary_properties(path: str | Path) -> LensLibraryIndexResult:
     warnings: list[str] = []
     skipped = 0
     section = "image_space"
+    zemax_files = _zemax_files_by_stem(source_path.parent / "zemax_files")
 
     with source_path.open("r", encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
@@ -83,7 +96,12 @@ def parse_lenslibrary_properties(path: str | Path) -> LensLibraryIndexResult:
             assert surface_count is not None
             assert element_count is not None
 
-            zmx_candidate = source_path.parent / "zemax_files" / f"{seed_id}.zmx"
+            zmx_matches = zemax_files.get(seed_id.casefold(), [])
+            if len(zmx_matches) > 1:
+                warnings.append(
+                    f"line {line_number}: multiple case-insensitive .zmx matches "
+                    f"for {seed_id}; no prescription path was selected"
+                )
             seeds.append(
                 SeedRecord(
                     seed_id=seed_id,
@@ -96,7 +114,7 @@ def parse_lenslibrary_properties(path: str | Path) -> LensLibraryIndexResult:
                     reference=reference,
                     conjugate="infinity",
                     source="LensLibrary",
-                    source_path=str(zmx_candidate) if zmx_candidate.exists() else None,
+                    source_path=str(zmx_matches[0]) if len(zmx_matches) == 1 else None,
                 )
             )
 

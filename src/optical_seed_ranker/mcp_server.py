@@ -5,7 +5,13 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .identifiers import (
+    LOCAL_PROVIDER,
+    PATENT_PROVIDER,
+    resolve_seed_selector,
+)
 from .index_io import read_seed_index
+from .json_io import ensure_standard_json
 from .mcp_tools import (
     derive_rectilinear_target,
     get_local_seed_structure,
@@ -65,10 +71,20 @@ def create_server(
         else _default_patent_seed_path()
     )
 
+    def local_seeds() -> list[Any]:
+        return read_seed_index(resolved_index) if resolved_index.is_file() else []
+
+    def patent_seeds() -> list[Any]:
+        return (
+            load_patent_seed_records(resolved_patent_seeds)
+            if resolved_patent_seeds.is_file()
+            else []
+        )
+
     def available_seeds() -> list[Any]:
-        seeds = read_seed_index(resolved_index) if resolved_index.is_file() else []
+        seeds = local_seeds()
         if resolved_patent_seeds.is_file():
-            seeds.extend(load_patent_seed_records(resolved_patent_seeds))
+            seeds.extend(patent_seeds())
         return seeds
 
     server = FastMCP(
@@ -109,11 +125,13 @@ def create_server(
         detector_diameter_mm: float,
         entrance_pupil_min_mm: float,
     ) -> dict[str, float]:
-        return derive_rectilinear_target(
-            field_x_full_deg=field_x_full_deg,
-            field_y_full_deg=field_y_full_deg,
-            detector_diameter_mm=detector_diameter_mm,
-            entrance_pupil_min_mm=entrance_pupil_min_mm,
+        return ensure_standard_json(
+            derive_rectilinear_target(
+                field_x_full_deg=field_x_full_deg,
+                field_y_full_deg=field_y_full_deg,
+                detector_diameter_mm=detector_diameter_mm,
+                entrance_pupil_min_mm=entrance_pupil_min_mm,
+            )
         )
 
     @server.tool(
@@ -146,28 +164,30 @@ def create_server(
                 "No local seed source is available. Run `seedranker index` or "
                 "configure the bundled patent seed dataset."
             )
-        return search_uv_seed_structures(
-            seeds=seeds,
-            evidence_by_seed=(
-                load_patent_seed_evidence(resolved_patent_seeds)
-                if resolved_patent_seeds.is_file()
-                else {}
-            ),
-            field_x_full_deg=field_x_full_deg,
-            field_y_full_deg=field_y_full_deg,
-            detector_diameter_mm=detector_diameter_mm,
-            entrance_pupil_min_mm=entrance_pupil_min_mm,
-            wavelength_min_nm=wavelength_min_nm,
-            wavelength_max_nm=wavelength_max_nm,
-            minimum_mtf_nyquist=minimum_mtf_nyquist,
-            maximum_distortion_percent=maximum_distortion_percent,
-            minimum_relative_illumination_percent=(
-                minimum_relative_illumination_percent
-            ),
-            require_documented_spectral_overlap=(
-                require_documented_spectral_overlap
-            ),
-            top_k=top_k,
+        return ensure_standard_json(
+            search_uv_seed_structures(
+                seeds=seeds,
+                evidence_by_seed=(
+                    load_patent_seed_evidence(resolved_patent_seeds)
+                    if resolved_patent_seeds.is_file()
+                    else {}
+                ),
+                field_x_full_deg=field_x_full_deg,
+                field_y_full_deg=field_y_full_deg,
+                detector_diameter_mm=detector_diameter_mm,
+                entrance_pupil_min_mm=entrance_pupil_min_mm,
+                wavelength_min_nm=wavelength_min_nm,
+                wavelength_max_nm=wavelength_max_nm,
+                minimum_mtf_nyquist=minimum_mtf_nyquist,
+                maximum_distortion_percent=maximum_distortion_percent,
+                minimum_relative_illumination_percent=(
+                    minimum_relative_illumination_percent
+                ),
+                require_documented_spectral_overlap=(
+                    require_documented_spectral_overlap
+                ),
+                top_k=top_k,
+            )
         )
 
     @server.tool(
@@ -175,7 +195,8 @@ def create_server(
         title="Read a local seed prescription",
         description=(
             "Return a transcribed patent prescription or local Zemax prescription "
-            "for a known seed ID. Optional uniform scaling changes dimensions only "
+            "for a known seed handle (or an unambiguous legacy ID). Optional "
+            "uniform scaling changes dimensions only "
             "and does not qualify the design."
         ),
         annotations=read_only,
@@ -185,26 +206,28 @@ def create_server(
         seed_id: str,
         scale_to_focal_length_mm: float | None = None,
     ) -> dict[str, Any]:
-        patent_ids = {
-            seed.seed_id
-            for seed in (
-                load_patent_seed_records(resolved_patent_seeds)
-                if resolved_patent_seeds.is_file()
-                else []
+        local_records = local_seeds()
+        patent_records = patent_seeds()
+        provider, resolved_seed_id = resolve_seed_selector(
+            seed_id,
+            local_seed_ids=(seed.seed_id for seed in local_records),
+            patent_seed_ids=(seed.seed_id for seed in patent_records),
+        )
+        if provider == PATENT_PROVIDER:
+            return ensure_standard_json(
+                get_patent_seed_structure(
+                    seed_id=resolved_seed_id,
+                    path=resolved_patent_seeds,
+                    scale_to_focal_length_mm=scale_to_focal_length_mm,
+                )
             )
-        }
-        if seed_id in patent_ids:
-            return get_patent_seed_structure(
-                seed_id=seed_id,
-                path=resolved_patent_seeds,
+        assert provider == LOCAL_PROVIDER
+        return ensure_standard_json(
+            get_local_seed_structure(
+                index_path=resolved_index,
+                seed_id=resolved_seed_id,
                 scale_to_focal_length_mm=scale_to_focal_length_mm,
             )
-        if not resolved_index.is_file():
-            raise KeyError(f"seed_id {seed_id!r} is not present in a local source")
-        return get_local_seed_structure(
-            index_path=resolved_index,
-            seed_id=seed_id,
-            scale_to_focal_length_mm=scale_to_focal_length_mm,
         )
 
     @server.tool(
@@ -226,7 +249,7 @@ def create_server(
             if patent_available
             else 0
         )
-        return {
+        return ensure_standard_json({
             "server": "optical-seed-ranker-local",
             "transport": "streamable-http",
             "loopback_only": True,
@@ -235,7 +258,7 @@ def create_server(
             "curated_patent_seed_data_available": patent_available,
             "curated_patent_seed_count": patent_count,
             "total_searchable_seed_count": local_count + patent_count,
-        }
+        })
 
     return server
 

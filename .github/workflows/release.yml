@@ -7,18 +7,56 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
 jobs:
   wheel:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
-      - run: python -m pip wheel --no-deps --wheel-dir dist .
-      - run: sha256sum dist/*.whl > dist/SHA256SUMS.txt
+      - name: Validate tag and configure reproducible timestamps
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          test "$(git rev-parse "${TAG}^{commit}")" = "$(git rev-parse HEAD)"
+          PYTHONPATH=src python -m optical_seed_ranker.release --tag "$TAG"
+          echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+          echo "PYTHONHASHSEED=0" >> "$GITHUB_ENV"
+          echo "TZ=UTC" >> "$GITHUB_ENV"
+      - name: Install pinned release backend
+        run: >-
+          python -m pip install --require-hashes --only-binary=:all:
+          -r requirements-release.txt
+      - name: Build wheel without dependency resolution
+        run: python -m pip wheel --no-build-isolation --no-deps --wheel-dir dist .
+      - name: Verify wheel identity
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: PYTHONPATH=src python -m optical_seed_ranker.release --tag "$TAG" --dist-dir dist
+      - run: cd dist && sha256sum *.whl > SHA256SUMS.txt
+      - name: Refuse to overwrite an existing release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          existing_assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          for asset in dist/*.whl dist/SHA256SUMS.txt; do
+            name="$(basename "$asset")"
+            if grep -Fqx "$name" <<< "$existing_assets"; then
+              echo "Refusing to overwrite existing release asset: $name" >&2
+              exit 1
+            fi
+          done
       - name: Upload wheel and checksum
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" dist/* --clobber
+        run: gh release upload "$TAG" dist/*.whl dist/SHA256SUMS.txt
