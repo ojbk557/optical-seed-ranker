@@ -4,21 +4,29 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
+from .json_io import ensure_standard_json
+
 SUPPORTED_LENGTH_UNIT = "mm"
 EVEN_ASPHERE_TYPES = {"EVENASPH", "EVENASPHERE"}
 
 
 def _float(value: str) -> float | None:
     try:
-        return float(value)
+        parsed = float(value)
     except ValueError:
         return None
+    if not isfinite(parsed):
+        raise ValueError(f"Zemax numeric value must be finite: {value!r}")
+    return parsed
 
 
 def _scaled(value: float | None, scale_factor: float) -> float | None:
     if value is None:
         return None
-    return round(value * scale_factor, 9)
+    scaled = value * scale_factor
+    if not isfinite(scaled):
+        raise ValueError("scaled prescription values must be finite")
+    return round(scaled, 9)
 
 
 def parse_zmx_prescription(path: str | Path) -> dict[str, Any]:
@@ -89,11 +97,14 @@ def parse_zmx_prescription(path: str | Path) -> dict[str, Any]:
                 None if curvature in (None, 0.0) else 1.0 / curvature
             )
         elif key == "DISZ" and values:
-            numeric_thickness = _float(values[0])
-            if numeric_thickness is None:
+            if values[0].upper() in {"INF", "INFINITY"}:
                 current["thickness_to_next"] = values[0].lower()
             else:
-                current["thickness_to_next_mm"] = numeric_thickness
+                numeric_thickness = _float(values[0])
+                if numeric_thickness is None:
+                    current["thickness_to_next"] = values[0].lower()
+                else:
+                    current["thickness_to_next_mm"] = numeric_thickness
         elif key == "DIAM" and values:
             current["semi_diameter_mm"] = _float(values[0])
         elif key == "CONI" and values:
@@ -148,7 +159,13 @@ def _scaled_surface_parameters(
         # OpticStudio stores the conic constant in CONI. EVENASPH PARM n is
         # alpha_n on r^(2n), so its length dimension is L^(1-2n).
         radial_order = 2 * number
-        scaled[parameter_number] = value * scale_factor ** (1 - radial_order)
+        try:
+            scaled_value = value * scale_factor ** (1 - radial_order)
+        except (OverflowError, ZeroDivisionError) as error:
+            raise ValueError("scaled asphere parameters must be finite") from error
+        if not isfinite(scaled_value):
+            raise ValueError("scaled asphere parameters must be finite")
+        scaled[parameter_number] = scaled_value
     return scaled
 
 
@@ -224,7 +241,7 @@ def prescription_payload(
                 }
             )
 
-    return {
+    payload = {
         "system": system,
         "scale_factor": round(scale_factor, 9),
         "surface_count_including_object_and_image": len(compact_surfaces),
@@ -232,3 +249,4 @@ def prescription_payload(
         "element_regions": element_regions,
         "surfaces": compact_surfaces,
     }
+    return ensure_standard_json(payload)

@@ -82,6 +82,93 @@ def test_uv_search_rejects_invalid_percentages():
         raise AssertionError("invalid relative illumination was accepted")
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("detector_diameter_mm", float("nan")),
+        ("entrance_pupil_min_mm", float("inf")),
+        ("minimum_mtf_nyquist", float("nan")),
+        ("maximum_distortion_percent", float("inf")),
+        ("minimum_relative_illumination_percent", float("nan")),
+    ],
+)
+def test_uv_search_rejects_non_finite_public_inputs(field, value):
+    inputs = {
+        "seeds": [_seed("seed", fno=1.0, field=90)],
+        "field_x_full_deg": 60,
+        "field_y_full_deg": 60,
+        "detector_diameter_mm": 18,
+        "entrance_pupil_min_mm": 12,
+        "wavelength_min_nm": 240,
+        "wavelength_max_nm": 320,
+        "minimum_mtf_nyquist": 0.4,
+        "maximum_distortion_percent": 3,
+        "minimum_relative_illumination_percent": 60,
+    }
+    inputs[field] = value
+
+    with pytest.raises(ValueError, match="finite"):
+        search_uv_seed_structures(**inputs)
+
+
+def test_uv_search_assumptions_report_actual_detector_and_pupil_inputs():
+    result = search_uv_seed_structures(
+        seeds=[_seed("seed", fno=1.0, field=90)],
+        field_x_full_deg=50,
+        field_y_full_deg=40,
+        detector_diameter_mm=25,
+        entrance_pupil_min_mm=8,
+        wavelength_min_nm=240,
+        wavelength_max_nm=320,
+    )
+
+    assert "rectangular_field_corners_touch_the_25_mm_image_circle" in result[
+        "assumptions"
+    ]
+    assert "entrance_pupil_is_evaluated_at_its_8_mm_minimum" in result[
+        "assumptions"
+    ]
+
+
+def test_provider_qualified_handles_keep_colliding_seed_evidence_separate():
+    patent = load_patent_seed_records()[0]
+    local = SeedRecord(
+        seed_id=patent.seed_id,
+        lens_type="camera",
+        focal_length_mm=12,
+        f_number=1,
+        full_fov_deg=90,
+        surface_count=4,
+        element_count=2,
+        reference="local-collision",
+        # Provider identity is not inferred from this externally controlled label.
+        source="curated_patent",
+    )
+
+    result = search_uv_seed_structures(
+        seeds=[patent, local],
+        evidence_by_seed=load_patent_seed_evidence(),
+        field_x_full_deg=60,
+        field_y_full_deg=60,
+        detector_diameter_mm=18,
+        entrance_pupil_min_mm=12,
+        wavelength_min_nm=240,
+        wavelength_max_nm=320,
+        top_k=2,
+    )
+    by_handle = {candidate["seed_handle"]: candidate for candidate in result["candidates"]}
+
+    assert set(by_handle) == {
+        f"patent:{patent.seed_id}",
+        f"local:{patent.seed_id}",
+    }
+    assert by_handle[f"patent:{patent.seed_id}"]["evidence"]["title"]
+    assert (
+        by_handle[f"local:{patent.seed_id}"]["evidence"]["evidence_level"]
+        == "index_metadata_only"
+    )
+
+
 def test_uv_search_can_exclude_geometry_only_records():
     unknown = _seed("unknown-spectrum", fno=0.9, field=90)
     documented = SeedRecord(
@@ -247,6 +334,15 @@ def test_reads_and_scales_curated_patent_prescription():
     assert "250-270 nm" in result["warnings"][0]
 
 
+@pytest.mark.parametrize("scale", [float("nan"), float("inf")])
+def test_patent_structure_rejects_non_finite_scaling(scale):
+    with pytest.raises(ValueError, match="finite"):
+        get_patent_seed_structure(
+            seed_id="CN113504627B",
+            scale_to_focal_length_mm=scale,
+        )
+
+
 def test_rejects_non_mm_zemax_prescriptions(tmp_path):
     prescription = tmp_path / "inch.zmx"
     prescription.write_text(
@@ -308,3 +404,16 @@ def test_rejects_invalid_prescription_scale_factor(tmp_path, scale_factor):
         prescription_payload(
             parse_zmx_prescription(prescription), scale_factor=scale_factor
         )
+
+
+def test_rejects_non_finite_zemax_numeric_tokens(tmp_path):
+    prescription = tmp_path / "nonfinite.zmx"
+    prescription.write_text(
+        "UNIT MM X W X CM MR CPMM\n"
+        "SURF 0\n TYPE STANDARD\n CURV NaN\n DISZ INFINITY\n"
+        "SURF 1\n TYPE STANDARD\n CURV 0\n DISZ 0\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="finite"):
+        parse_zmx_prescription(prescription)

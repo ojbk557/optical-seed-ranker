@@ -13,6 +13,10 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "complexity": 0.05,
 }
 
+# A target may intentionally crop, overscan, or include ordinary distortion. V0.1
+# only rejects axis dimensions whose rectilinear projection differs by over 2x.
+MAX_RECTILINEAR_IMAGE_SCALE_RATIO = 2.0
+
 
 def _positive(name: str, value: float) -> float:
     value = float(value)
@@ -61,6 +65,8 @@ class TargetSpec:
         _positive("image_width_mm", self.image_width_mm)
         _positive("image_height_mm", self.image_height_mm)
         _positive("image_surface_semi_diameter_mm", self.image_surface_semi_diameter_mm)
+        if self.field_x_full_deg >= 180 or self.field_y_full_deg >= 180:
+            raise ValueError("full field angles must be below 180 degrees")
         if (
             self.image_surface_semi_diameter_mm < self.corner_image_height_mm
             and not isclose(
@@ -74,8 +80,33 @@ class TargetSpec:
                 "image_surface_semi_diameter_mm must cover the rectangular "
                 "image corner"
             )
-        if self.field_x_full_deg >= 180 or self.field_y_full_deg >= 180:
-            raise ValueError("full field angles must be below 180 degrees")
+        projected_dimensions = (
+            (
+                "image_width_mm",
+                self.image_width_mm,
+                2.0
+                * self.focal_length_mm
+                * tan(radians(self.field_x_full_deg / 2.0)),
+            ),
+            (
+                "image_height_mm",
+                self.image_height_mm,
+                2.0
+                * self.focal_length_mm
+                * tan(radians(self.field_y_full_deg / 2.0)),
+            ),
+        )
+        for name, actual, projected in projected_dimensions:
+            if not isfinite(projected) or projected <= 0:
+                raise ValueError(
+                    f"{name} projection from focal length and field must be finite"
+                )
+            ratio = max(actual / projected, projected / actual)
+            if not isfinite(ratio) or ratio > MAX_RECTILINEAR_IMAGE_SCALE_RATIO:
+                raise ValueError(
+                    f"{name} is inconsistent with focal length and rectilinear "
+                    f"field by more than {MAX_RECTILINEAR_IMAGE_SCALE_RATIO:g}x"
+                )
         if not self.wavelengths_nm:
             raise ValueError("at least one wavelength is required")
         if any(not isfinite(float(w)) or float(w) <= 0 for w in self.wavelengths_nm):
@@ -190,10 +221,13 @@ class SeedRecord:
     back_focal_length_mm: float | None = None
     asphere_count: int | None = None
     obsolete_glass_count: int | None = None
+    provider: str = "local"
 
     def __post_init__(self) -> None:
         if not self.seed_id.strip():
             raise ValueError("seed_id cannot be empty")
+        if self.provider not in {"local", "patent"}:
+            raise ValueError("provider must be 'local' or 'patent'")
         _positive("seed focal_length_mm", self.focal_length_mm)
         _positive("seed f_number", self.f_number)
         _positive("seed full_fov_deg", self.full_fov_deg)

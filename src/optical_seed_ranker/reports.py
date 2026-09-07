@@ -5,6 +5,13 @@ from html import escape
 from pathlib import Path
 from typing import Iterable
 
+from .csv_safety import (
+    TEXT_ENCODING_FIELD,
+    TEXT_ENCODING_VALUE,
+    spreadsheet_safe_path,
+    spreadsheet_safe_text,
+)
+from .identifiers import seed_handle
 from .models import ScoreBreakdown, TargetSpec
 
 COMPONENTS = (
@@ -29,6 +36,8 @@ def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> in
     fields = [
         "rank",
         "seed_id",
+        "seed_handle",
+        "provider",
         "metadata_score",
         "f_number_score",
         "field_score",
@@ -52,6 +61,7 @@ def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> in
         "reference",
         "source",
         "source_path",
+        TEXT_ENCODING_FIELD,
     ]
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -61,7 +71,9 @@ def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> in
             writer.writerow(
                 {
                     "rank": rank,
-                    "seed_id": seed.seed_id,
+                    "seed_id": spreadsheet_safe_text(seed.seed_id),
+                    "seed_handle": spreadsheet_safe_text(seed_handle(seed)),
+                    "provider": spreadsheet_safe_text(seed.provider),
                     "metadata_score": f"{result.metadata_score:.3f}",
                     **{
                         f"{column}_score": _csv_value(result.component_scores, name)
@@ -77,10 +89,11 @@ def write_ranking_csv(results: Iterable[ScoreBreakdown], path: str | Path) -> in
                     "scale_factor": f"{result.scale_factor:.6f}",
                     "element_count": seed.element_count,
                     "surface_count": seed.surface_count,
-                    "lens_type": seed.lens_type,
-                    "reference": seed.reference,
-                    "source": seed.source,
-                    "source_path": seed.source_path or "",
+                    "lens_type": spreadsheet_safe_text(seed.lens_type),
+                    "reference": spreadsheet_safe_text(seed.reference),
+                    "source": spreadsheet_safe_text(seed.source),
+                    "source_path": spreadsheet_safe_path(seed.source_path or ""),
+                    TEXT_ENCODING_FIELD: TEXT_ENCODING_VALUE,
                 }
             )
     return len(rows)

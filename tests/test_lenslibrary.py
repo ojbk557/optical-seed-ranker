@@ -21,3 +21,39 @@ Shafer1980             x-ray telescope          125                     N/A     
     assert result.seeds[0].seed_id == "1975678"
     assert result.seeds[0].f_number == 1.5
     assert result.skipped_lines == 2
+
+
+def test_preserves_actual_case_insensitive_zemax_path(tmp_path: Path):
+    zemax_dir = tmp_path / "zemax_files"
+    zemax_dir.mkdir()
+    prescription = zemax_dir / "1975678.ZMX"
+    prescription.write_text("UNIT MM\nSURF 0\n", encoding="utf-8")
+    source = tmp_path / "lens_properties_list.txt"
+    source.write_text(
+        "image_space\n"
+        "filename  lens_type  focal_length(mm)  f-number  FFOV(deg)  "
+        "N_surfaces  N_elements  ref\n"
+        "1975678  camera  92.6  1.5  42.0  10  7  Bertele1934\n",
+        encoding="utf-8",
+    )
+
+    result = parse_lenslibrary_properties(source)
+
+    assert result.seeds[0].source_path == str(prescription.resolve())
+
+
+def test_non_finite_lenslibrary_row_is_skipped(tmp_path: Path):
+    source = tmp_path / "lens_properties_list.txt"
+    source.write_text(
+        "image_space\n"
+        "filename  lens_type  focal_length(mm)  f-number  FFOV(deg)  "
+        "N_surfaces  N_elements  ref\n"
+        "bad  camera  NaN  1.5  42.0  10  7  bad\n"
+        "good  camera  92.6  1.5  42.0  10  7  good\n",
+        encoding="utf-8",
+    )
+
+    result = parse_lenslibrary_properties(source)
+
+    assert [seed.seed_id for seed in result.seeds] == ["good"]
+    assert result.skipped_lines == 1

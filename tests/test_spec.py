@@ -86,3 +86,39 @@ def test_rejects_unknown_metadata_weight_key():
     }
     with pytest.raises(ValueError, match="unknown metadata_weights"):
         TargetSpec.from_mapping(raw)
+
+
+def test_rejects_clearly_contradictory_rectilinear_image_size():
+    raw = {
+        "name": "contradictory-projection",
+        "focal_length_mm": 100,
+        "f_number": 2,
+        "field": {"x_full_deg": 10, "y_full_deg": 10},
+        "image": {
+            "width_mm": 100,
+            "height_mm": 100,
+            "surface_semi_diameter_mm": 71,
+        },
+        "wavelengths_nm": [550],
+    }
+
+    with pytest.raises(ValueError, match="rectilinear field"):
+        TargetSpec.from_mapping(raw)
+
+
+def test_projection_check_allows_reasonable_crop_or_distortion_tolerance():
+    spec = TargetSpec(
+        name="tolerant-projection",
+        conjugate="infinity",
+        architecture="camera",
+        focal_length_mm=100,
+        f_number=2,
+        field_x_full_deg=10,
+        field_y_full_deg=10,
+        image_width_mm=10,
+        image_height_mm=10,
+        image_surface_semi_diameter_mm=8,
+        wavelengths_nm=(550,),
+    )
+
+    assert spec.image_width_mm == 10

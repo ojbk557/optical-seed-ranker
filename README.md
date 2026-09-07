@@ -30,10 +30,18 @@ py -3.12 -m venv .venv
 python -m pip install "https://github.com/ojbk557/optical-seed-ranker/releases/download/v0.1.1/optical_seed_ranker-0.1.1-py3-none-any.whl"
 
 seedranker uv-search --top-k 5 --output uv-shortlist.json
-seedranker structure --seed-id CN113504627B --output CN113504627B.json
+seedranker structure --seed-id patent:CN113504627B --output CN113504627B.json
 ```
 
 These commands need no external dataset or API credential. The output is an evidence-limited metadata shortlist and a transcribed starting prescription, not a qualified UV design. Verify the release wheel against `SHA256SUMS.txt` on the [v0.1.1 release page](https://github.com/ojbk557/optical-seed-ranker/releases/tag/v0.1.1) when integrity matters.
+
+Each UV candidate includes a stable `seed_handle` such as
+`patent:CN113504627B` or `local:1975678`. The structure command and MCP tool
+continue to accept a bare legacy seed ID when it is unique across providers;
+when local and patent IDs collide, they require the returned qualified handle.
+Historic IDs such as `local:foo` remain valid when there is no competing handle.
+If both `foo` and `local:foo` exist, the error provides escaped alternatives:
+`local:%66oo` selects `foo`, while `local:local%3Afoo` selects the historic ID.
 
 ## Rank a local LensLibrary checkout
 
@@ -71,6 +79,12 @@ seedopt run `
 ```
 
 The selected ranking row must contain an accessible local `source_path`; metadata-only patent rows cannot be passed to OpticStudio until they have been reconstructed as a supported optical file.
+
+Text fields in generated CSV files use the declared `spreadsheet-safe-v1`
+encoding when a leading character could be evaluated as a spreadsheet formula.
+Index reads reverse that encoding. `source_path` remains directly consumable by
+the optimizer: a dangerous relative name such as `=seed.zmx` is emitted as the
+equivalent `./=seed.zmx`, while normal absolute LensLibrary paths are unchanged.
 
 ## Local MCP server
 
@@ -111,7 +125,7 @@ metadata shortlist, not a claim that UV glass, MTF, distortion, or illumination
 requirements have been met. By default the MCP search excludes geometry-only
 records with no documented overlap with the requested wavelength band; this can
 be disabled with `require_documented_spectral_overlap=false`. The structure tool
-accepts only a seed ID already in
+accepts only a seed handle (or unambiguous legacy ID) already in
 the configured local sources; it reads either a matching Zemax text prescription
 or a transcribed patent surface table without exposing an arbitrary filesystem
 browser. Optional uniform scaling changes radii, thicknesses, and apertures, but
